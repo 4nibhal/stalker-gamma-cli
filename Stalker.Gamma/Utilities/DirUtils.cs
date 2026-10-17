@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Stalker.Gamma.Filesystem;
 
 namespace Stalker.Gamma.Utilities;
 
@@ -6,67 +7,138 @@ public static class DirUtils
 {
     public static void NormalizePermissions(string dir)
     {
-        var di = new DirectoryInfo(dir);
-        if (!di.Exists)
-        {
-            return;
-        }
-
-        try
-        {
-            // 1. Normalize the directory itself
-            di.Attributes &= ~FileAttributes.ReadOnly;
-            di.UnixFileMode =
-                UnixFileMode.UserRead
-                | UnixFileMode.UserWrite
-                | UnixFileMode.UserExecute
-                | UnixFileMode.GroupRead
-                | UnixFileMode.GroupExecute
-                | UnixFileMode.GroupWrite
-                | UnixFileMode.OtherRead
-                | UnixFileMode.OtherExecute;
-
-            // 2. Normalize all files in this directory
-            foreach (var fi in di.GetFiles())
-            {
-                try
-                {
-                    fi.IsReadOnly = false;
-                    fi.Attributes &= ~FileAttributes.ReadOnly;
-                }
-                catch (UnauthorizedAccessException)
-                { /* Skip files we can't touch */
-                }
-            }
-
-            // 3. Recurse into subdirectories
-            foreach (var subDir in di.GetDirectories())
-            {
-                NormalizePermissions(subDir.FullName);
-            }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Catching at this level allows the recursion to skip folders
-            // it doesn't have permission to list
-        }
+        NormalizePermissions(dir, default);
     }
 
-    public static void RecursivelyDeleteDirectory(string dir, IReadOnlyList<string> doNotMatch)
+    internal static void NormalizePermissions(string dir, CancellationToken ct)
     {
-        var dirInfo = new DirectoryInfo(dir);
-        foreach (var fi in dirInfo.GetFiles(".*", SearchOption.TopDirectoryOnly))
+        var tree = PrepareDirectoryTree(dir, ct);
+        NormalizePermissions(tree, ct);
+    }
+
+    internal static void NormalizePermissions(CheckedTree tree, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var skipped = new List<string>();
+        var filesByParent = tree.Entries.Where(entry => entry.Kind == EntryKind.NonDirectory)
+            .ToLookup(entry => Path.GetDirectoryName(entry.FullPath)!, StringComparer.Ordinal);
+        foreach (var planned in tree.Entries.Where(entry => entry.Kind == EntryKind.Directory)
+            .OrderBy(entry => ManagedCopyPlan.Depth(entry.FullPath))
+            .ThenBy(entry => entry.FullPath, StringComparer.Ordinal))
         {
-            fi.Delete();
+            ct.ThrowIfCancellationRequested();
+            if (skipped.Any(parent => ManagedCopyPlan.IsAtOrBelow(planned.FullPath, parent)))
+                continue;
+            // Throwing inspection is outside the mutation-only permission
+            // catches. A reparse/inspection failure must never become a skip.
+            var attributes = ReadCheckedAttributes(tree, planned, ct);
+            var directory = tree.Boundary.CheckPath(planned.FullPath, ExpectedEntry.Directory,
+                MissingPolicy.Reject, ct);
+            try
+            {
+                File.SetAttributes(directory.FullPath, attributes & ~FileAttributes.ReadOnly);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                skipped.Add(directory.FullPath);
+                continue;
+            }
+            directory = tree.Boundary.CheckPath(directory.FullPath, ExpectedEntry.Directory,
+                MissingPolicy.Reject, ct);
+            try
+            {
+                // Deliberately retain the existing directory mode policy.
+                File.SetUnixFileMode(directory.FullPath,
+                    UnixFileMode.UserRead
+                    | UnixFileMode.UserWrite
+                    | UnixFileMode.UserExecute
+                    | UnixFileMode.GroupRead
+                    | UnixFileMode.GroupExecute
+                    | UnixFileMode.GroupWrite
+                    | UnixFileMode.OtherRead
+                    | UnixFileMode.OtherExecute);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                skipped.Add(directory.FullPath);
+                continue;
+            }
+            foreach (var file in filesByParent[directory.FullPath])
+            {
+                ct.ThrowIfCancellationRequested();
+                var fileAttributes = ReadCheckedAttributes(tree, file, ct);
+                var current = tree.Boundary.CheckPath(file.FullPath, ExpectedEntry.NonDirectory,
+                    MissingPolicy.Reject, ct);
+                try
+                {
+                    File.SetAttributes(current.FullPath, fileAttributes & ~FileAttributes.ReadOnly);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Preserve skipping an individual unwritable file only.
+                }
+            }
         }
-        foreach (
-            var d in dirInfo
-                .GetDirectories()
-                .Where(x => !doNotMatch.Contains(x.Name, StringComparer.OrdinalIgnoreCase))
-        )
+        ct.ThrowIfCancellationRequested();
+    }
+
+    public static void RecursivelyDeleteDirectory(string dir, IReadOnlyList<string> doNotMatch) =>
+        RecursivelyDeleteDirectory(dir, doNotMatch, default);
+
+    internal static void RecursivelyDeleteDirectory(
+        string dir, IReadOnlyList<string> doNotMatch, CancellationToken ct)
+    {
+        var tree = PrepareDirectoryTree(dir, ct, MissingPolicy.Reject);
+        var selected = PrepareCleanup(tree, doNotMatch, ct);
+        ExecuteCleanup(tree, selected, ct);
+    }
+
+    internal static IReadOnlyList<CheckedEntry> PrepareCleanup(
+        CheckedTree tree, IReadOnlyList<string> doNotMatch, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(doNotMatch);
+        var retainedNames = doNotMatch.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var removedDirectories = tree.Entries.Where(entry => entry.Kind == EntryKind.Directory
+            && string.Equals(Path.GetDirectoryName(entry.FullPath), tree.StartPath, StringComparison.Ordinal)
+            && !retainedNames.Contains(Path.GetFileName(entry.FullPath)))
+            .Select(entry => entry.FullPath).ToHashSet(StringComparer.Ordinal);
+        var selected = new List<CheckedEntry>();
+        foreach (var entry in tree.Entries)
         {
-            d.Delete(true);
+            ct.ThrowIfCancellationRequested();
+            if (entry.FullPath == tree.StartPath || entry.Kind == EntryKind.Missing)
+                continue;
+            var relative = Path.GetRelativePath(tree.StartPath, entry.FullPath);
+            var firstSeparator = relative.IndexOf(Path.DirectorySeparatorChar);
+            var topName = firstSeparator < 0 ? relative : relative[..firstSeparator];
+            if (removedDirectories.Contains(Path.Join(tree.StartPath, topName))
+                || (entry.Kind == EntryKind.NonDirectory && firstSeparator < 0
+                    && Path.GetFileName(entry.FullPath).StartsWith(".", StringComparison.Ordinal)))
+                selected.Add(entry);
         }
+        var result = Array.AsReadOnly(selected.OrderByDescending(entry => ManagedCopyPlan.Depth(entry.FullPath))
+            .ThenBy(entry => entry.FullPath, StringComparer.Ordinal).ToArray());
+        ct.ThrowIfCancellationRequested();
+        return result;
+    }
+
+    internal static void ExecuteCleanup(
+        CheckedTree tree, IReadOnlyList<CheckedEntry> selected, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        foreach (var entry in selected)
+        {
+            ct.ThrowIfCancellationRequested();
+            var current = tree.Boundary.CheckPath(entry.FullPath,
+                entry.Kind == EntryKind.Directory ? ExpectedEntry.Directory : ExpectedEntry.NonDirectory,
+                MissingPolicy.Reject, ct);
+            if (current.Kind == EntryKind.Directory)
+                Directory.Delete(current.FullPath);
+            else
+                File.Delete(current.FullPath);
+        }
+        ct.ThrowIfCancellationRequested();
     }
 
     public static void CopyDirectory(
@@ -80,179 +152,137 @@ public static class DirUtils
         CancellationToken cancellationToken = default
     )
     {
-        if (sourceDir.Contains(".git"))
+        var plan = PrepareCopy(sourceDir, destDir, overwrite, fileFilter, moveFile, cancellationToken);
+        ExecuteCopy(plan, onProgress, txtProgress, cancellationToken);
+    }
+
+    internal static ManagedCopyPlan PrepareCopy(
+        string sourceDir, string destDir, bool overwrite, string? fileFilter,
+        bool moveFile, CancellationToken ct) =>
+        ManagedCopyPlan.Prepare(sourceDir, destDir, overwrite, fileFilter, moveFile, ct);
+
+    internal static void ExecuteCopy(
+        ManagedCopyPlan plan, Action<double>? onProgress, Action<string>? txtProgress, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (plan.IsNoOp)
         {
+            ct.ThrowIfCancellationRequested();
             return;
         }
-
-        // Count total files first if progress callback is provided
-        var totalFiles = 0;
         var copiedFiles = 0;
-
-        if (onProgress != null)
-        {
-            totalFiles = CountFiles(sourceDir, fileFilter);
-        }
-
-        CopyDirectoryInternal(
-            sourceDir,
-            destDir,
-            overwrite,
-            fileFilter,
-            onProgress,
-            ref copiedFiles,
-            totalFiles,
-            txtProgress,
-            moveFile,
-            cancellationToken
-        );
-    }
-
-    private static int CountFiles(string sourceDir, string? fileFilter)
-    {
-        if (sourceDir.Contains(".git"))
-        {
-            return 0;
-        }
-
-        var sourceDirInfo = new DirectoryInfo(sourceDir);
-        int count = 0;
-
-        foreach (var file in sourceDirInfo.GetFiles())
-        {
-            if (!string.IsNullOrWhiteSpace(fileFilter) && file.Name == fileFilter)
-            {
-                continue;
-            }
-            count++;
-        }
-
-        foreach (var subDir in sourceDirInfo.GetDirectories())
-        {
-            if (subDir.EnumerateFiles("*.*", SearchOption.AllDirectories).Any())
-            {
-                count += CountFiles(subDir.FullName, fileFilter);
-            }
-        }
-
-        return count;
-    }
-
-    private static void CopyDirectoryInternal(
-        string sourceDir,
-        string destDir,
-        bool overwrite,
-        string? fileFilter,
-        Action<double>? onProgress,
-        ref int copiedFiles,
-        int totalFiles,
-        Action<string>? txtProgress = null,
-        bool moveFile = false,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return;
-        }
-        txtProgress?.Invoke(
-            $"""
-            sourceDir = {sourceDir}
-            destDir = {destDir}
-            overwrite = {overwrite}
-            fileFilter = {fileFilter}
+        ReportText(txtProgress, $"""
+            sourceDir = {plan.SourceBoundary.Root}
+            destDir = {plan.DestinationBoundary.Root}
+            overwrite = {plan.Overwrite}
+            fileFilter = {plan.FileFilter}
             copiedFiles = {copiedFiles}
-            totalFiles = {totalFiles}
-            """
-        );
-        txtProgress?.Invoke($"Copying {sourceDir} to {destDir}");
-        if (sourceDir.Contains(".git"))
+            totalFiles = {plan.TotalFiles}
+            """, ct);
+        ReportText(txtProgress, $"Copying {plan.SourceBoundary.Root} to {plan.DestinationBoundary.Root}", ct);
+        foreach (var mapping in plan.Directories)
         {
-            txtProgress?.Invoke($"Skipping {sourceDir}, .git folder found");
-            return;
+            ct.ThrowIfCancellationRequested();
+            plan.SourceBoundary.CheckPath(mapping.Source.FullPath, ExpectedEntry.Directory, MissingPolicy.Reject, ct);
+            var destination = plan.DestinationBoundary.CheckPath(mapping.Destination.FullPath,
+                ExpectedEntry.Directory, MissingPolicy.Suffix, ct);
+            Directory.CreateDirectory(destination.FullPath);
+            ReportText(txtProgress, $"Created {destination.FullPath}", ct);
         }
-
-        Directory.CreateDirectory(destDir);
-        txtProgress?.Invoke($"Created {destDir}");
-        var sourceDirInfo = new DirectoryInfo(sourceDir);
-        foreach (var file in sourceDirInfo.GetFiles())
+        foreach (var mapping in plan.Files)
         {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
+            ct.ThrowIfCancellationRequested();
+            var source = plan.SourceBoundary.CheckPath(mapping.Source.FullPath,
+                ExpectedEntry.NonDirectory, MissingPolicy.Reject, ct);
             if (txtProgress is not null)
             {
-                using var sha = SHA256.Create();
-                using var stream = File.OpenRead(file.FullName);
-                var hashBytes = SHA256.HashData(stream);
-                var hash = Convert.ToHexString(hashBytes);
-                txtProgress.Invoke($"Copying {file.FullName}, SHA256 = {hash}");
+                plan.DestinationBoundary.CheckPath(mapping.Destination.FullPath,
+                    ExpectedEntry.NonDirectory, MissingPolicy.Leaf, ct);
+                string hash;
+                using (var stream = File.OpenRead(source.FullPath))
+                    hash = Convert.ToHexString(SHA256.HashData(stream));
+                ct.ThrowIfCancellationRequested();
+                ReportText(txtProgress, $"Copying {source.FullPath}, SHA256 = {hash}", ct);
             }
-            if (!string.IsNullOrWhiteSpace(fileFilter) && file.Name == fileFilter)
+            var target = plan.DestinationBoundary.CheckPath(mapping.Destination.FullPath,
+                ExpectedEntry.NonDirectory, MissingPolicy.Leaf, ct);
+            if (target.Kind == EntryKind.NonDirectory)
             {
-                txtProgress?.Invoke($"Skipping {file.FullName}");
-                continue;
-            }
-
-            if (File.Exists(Path.Combine(destDir, file.Name)))
-            {
-                txtProgress?.Invoke($"File {Path.Combine(destDir, file.Name)} already exists");
-                if (overwrite)
+                ReportText(txtProgress, $"File {target.FullPath} already exists", ct);
+                if (!plan.Overwrite)
                 {
-                    txtProgress?.Invoke($"Overwriting {Path.Combine(destDir, file.Name)}");
-                    if (moveFile)
-                    {
-                        file.MoveTo(Path.Combine(destDir, file.Name), overwrite);
-                    }
-                    else
-                    {
-                        file.CopyTo(Path.Combine(destDir, file.Name), overwrite);
-                    }
-                    copiedFiles++;
-                    onProgress?.Invoke((double)copiedFiles / totalFiles);
+                    ct.ThrowIfCancellationRequested();
+                    continue;
                 }
+                ReportText(txtProgress, $"Overwriting {target.FullPath}", ct);
             }
             else
-            {
-                txtProgress?.Invoke(
-                    $"Copying {file.FullName} to {Path.Combine(destDir, file.Name)}"
-                );
-                if (moveFile)
-                {
-                    file.MoveTo(Path.Combine(destDir, file.Name), overwrite);
-                }
-                else
-                {
-                    file.CopyTo(Path.Combine(destDir, file.Name), overwrite);
-                }
-                copiedFiles++;
-                onProgress?.Invoke((double)copiedFiles / totalFiles);
-            }
-        }
+                ReportText(txtProgress, $"Copying {mapping.Source.FullPath} to {target.FullPath}", ct);
 
-        foreach (var subDir in sourceDirInfo.GetDirectories())
-        {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
-            txtProgress?.Invoke($"Copying {subDir.FullName}");
-            // only copy directories if they're not empty
-            if (subDir.EnumerateFiles("*.*", SearchOption.AllDirectories).Any())
-            {
-                CopyDirectoryInternal(
-                    subDir.FullName,
-                    Path.Combine(destDir, subDir.Name),
-                    overwrite,
-                    fileFilter,
-                    onProgress,
-                    ref copiedFiles,
-                    totalFiles,
-                    txtProgress,
-                    moveFile
-                );
-            }
+            // Recheck after callbacks too. Checked entries are immutable state
+            // evidence, NOT authority to use stale paths or a race-safe handle.
+            source = plan.SourceBoundary.CheckPath(mapping.Source.FullPath,
+                ExpectedEntry.NonDirectory, MissingPolicy.Reject, ct);
+            var destination = plan.DestinationBoundary.CheckPath(mapping.Destination.FullPath,
+                ExpectedEntry.NonDirectory, MissingPolicy.Leaf, ct);
+            ct.ThrowIfCancellationRequested();
+            if (plan.MoveFile)
+                File.Move(source.FullPath, destination.FullPath, plan.Overwrite);
+            else
+                File.Copy(source.FullPath, destination.FullPath, plan.Overwrite);
+            copiedFiles++;
+            ReportProgress(onProgress, (double)copiedFiles / plan.TotalFiles, ct);
         }
+        ct.ThrowIfCancellationRequested();
+    }
+
+    internal static int CountFiles(string sourceDir, string? fileFilter, CancellationToken ct = default)
+    {
+        var tree = PrepareDirectoryTree(sourceDir, ct, MissingPolicy.Reject);
+        var directories = ManagedCopyPlan.SelectDirectories(tree, ct);
+        var files = ManagedCopyPlan.SelectFiles(tree, directories, fileFilter, ct);
+        ct.ThrowIfCancellationRequested();
+        return files.Count;
+    }
+
+    internal static CheckedTree PrepareDirectoryTree(
+        string dir, CancellationToken ct, MissingPolicy missing = MissingPolicy.Suffix)
+    {
+        ct.ThrowIfCancellationRequested();
+        var boundary = new FileSystemBoundary(dir, Directory.GetCurrentDirectory());
+        return boundary.CheckTree(boundary.Root, ExpectedEntry.Directory, missing, ct);
+    }
+
+    private static FileAttributes ReadCheckedAttributes(CheckedTree tree, CheckedEntry entry, CancellationToken ct)
+    {
+        var current = tree.Boundary.CheckPath(entry.FullPath,
+            entry.Kind == EntryKind.Directory ? ExpectedEntry.Directory : ExpectedEntry.NonDirectory,
+            MissingPolicy.Reject, ct);
+        try
+        {
+            var attributes = File.GetAttributes(current.FullPath);
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+                throw new UnsafePathException("Linked filesystem entries are not allowed.");
+            ct.ThrowIfCancellationRequested();
+            return attributes;
+        }
+        catch (Exception error) when (!OperationFailure.IsCancellation(error) && !UnsafePathException.IsUnsafe(error))
+        {
+            throw new UnsafePathException("Cannot inspect filesystem attributes.", error);
+        }
+    }
+
+    private static void ReportText(Action<string>? callback, string text, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        callback?.Invoke(text);
+        ct.ThrowIfCancellationRequested();
+    }
+
+    private static void ReportProgress(Action<double>? callback, double progress, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        callback?.Invoke(progress);
+        ct.ThrowIfCancellationRequested();
     }
 }

@@ -1,12 +1,19 @@
 ﻿using System.Text;
+using Stalker.Gamma.Filesystem;
 
 namespace Stalker.Gamma.GammaInstallerServices;
 
 public static class WriteAddonMetaIni
 {
-    public static void Write(string extractPath, string archiveName, string niceUrl) =>
+    public static void Write(string extractPath, string archiveName, string niceUrl)
+    {
+        archiveName = InputPolicy.RequireComponent(archiveName, "archive name");
+        var boundary = new FileSystemBoundary(extractPath, Directory.GetCurrentDirectory());
+        boundary.CheckPath(boundary.Root, ExpectedEntry.Directory);
+        var meta = boundary.CheckPath(Path.Join(boundary.Root, "meta.ini"), ExpectedEntry.NonDirectory,
+            MissingPolicy.Leaf);
         File.WriteAllText(
-            Path.Join(extractPath, "meta.ini"),
+            meta.FullPath,
             $"""
             [General]
             gameName=stalkeranomaly
@@ -39,4 +46,5 @@ public static class WriteAddonMetaIni
             """.ReplaceLineEndings("\r\n"),
             encoding: Encoding.UTF8
         );
+    }
 }
