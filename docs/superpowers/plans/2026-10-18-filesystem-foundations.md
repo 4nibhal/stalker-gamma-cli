@@ -38,7 +38,7 @@ Dependency order: Tasks 1 and 2 in parallel; after review, Tasks 3 and 4 in para
 | Task 3 — record transport/roles | `Stalker.Gamma/Filesystem/RecordPathPolicy.cs`; `Stalker.Gamma/Models/ModPackMakerRecord.cs`; `Stalker.Gamma/Factories/{ModPackMakerRecordFactory,DownloadableRecordFactory,SeparatorsFactory}.cs`; `Stalker.Gamma/Extensions/DiffModPackMakerLists.cs`; `tests/LinuxRegression/PathPolicyCases.cs`; `tests/test_record_policy_sources.py` |
 | Task 4 — inspection | `Stalker.Gamma/Filesystem/{FileSystemBoundary,CheckedEntry,CheckedTree}.cs`; `tests/LinuxRegression/FileSystemBoundaryCases.cs`; `tests/test_inspection_sources.py` |
 | Task 5 — managed operations | `Stalker.Gamma/Filesystem/ManagedCopyPlan.cs`; `Stalker.Gamma/Utilities/DirUtils.cs`; `Stalker.Gamma/GammaInstallerServices/{ProcessInstructions,CleanExtractPath,WriteAddonMetaIni}.cs`; `Stalker.Gamma/Models/Separator.cs`; `tests/LinuxRegression/ManagedTreeCases.cs`; `tests/test_managed_tree_sources.py` |
-| Coordinator — Task 6 and common integration | `tests/LinuxRegression/Program.cs`; `Stalker.Gamma/Properties/AssemblyInfo.cs`; this plan/spec/review status and `tests/FILESYSTEM-REGRESSIONS.md` |
+| Coordinator — Task 6 and common integration | `tests/LinuxRegression/Program.cs`; `Stalker.Gamma/Properties/AssemblyInfo.cs`; `tests/test_foundation_integration.py`; this plan/spec/review status and `tests/FILESYSTEM-REGRESSIONS.md` |
 
 ### Fixed input/transport contracts
 
@@ -104,9 +104,12 @@ CheckTree inspects before descent, enumerates only top-level entries, classifies
 
 ## Task 1: Pure input, owned instructions and stop classification
 
+**Source gate:** reviewed complete at `6b12bc8`; both task verdicts approved,
+no findings. C# execution and dependent integration remain separate gates.
+
 **Files/ownership:** Task 1 row above only. **Consumes:** no production prerequisites; tests use the fixed Check contract. **Produces:** the fixed input/error contracts above, available to Tasks 3/4/5.
 
-- [ ] Write `InputPolicyCases.cs` before production files, with literal expected values for components, relative paths, every transport-table row, source-list mutation, ordered equality/hash and aggregate stop classification.
+- [x] Write `InputPolicyCases.cs` before production files, with literal expected values for components, relative paths, every transport-table row, source-list mutation, ordered equality/hash and aggregate stop classification.
 
 ```csharp
 Check.Equal("d'Artagnan ñ.dll", InputPolicy.RequireComponent("d'Artagnan ñ.dll", "fixture"));
@@ -119,17 +122,20 @@ Check.True(literal.Equals(InstructionSet.FromJsonTokens(literal.ToJsonTokens()))
 Check.True(!UnsafePathException.IsUnsafe(new IOException("ordinary")), "ordinary I/O remains ordinary");
 ```
 
-- [ ] Add `tests/test_input_policy_sources.py` (standard-library unittest, structural only). Read missing paths as empty text so missing feature assertions fail rather than import errors. Assert owned instruction transport and both recursive classifiers exist; never reimplement validation in Python.
-- [ ] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_input_policy_sources -v`; record expected structural failure before implementation.
-- [ ] Implement only the four Task 1 production files. Use a private copied string array wrapped with `Array.AsReadOnly`, `SequenceEqual(..., StringComparer.Ordinal)` and a matching HashCode accumulator. Raw ingress retains blankness; ToJsonTokens disambiguates literal zero. Parse/validation errors cannot print remote records.
-- [ ] Run the targeted Python command and all Python tests. Self-review raw-versus-parsed zero, controls before trimming, absolute-prefix whitespace, empty relative path rejection and defensive ownership. Report C# fixtures uncompiled/unexecuted; no behavior-pass claim.
-- [ ] Write the implementer report in the task workspace. Coordinator reviews spec/quality, resolves findings and commits exactly this task's paths; no agent git mutation.
+- [x] Add `tests/test_input_policy_sources.py` (standard-library unittest, structural only). Read missing paths as empty text so missing feature assertions fail rather than import errors. Assert owned instruction transport and both recursive classifiers exist; never reimplement validation in Python.
+- [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_input_policy_sources -v`; record expected structural failure before implementation.
+- [x] Implement only the four Task 1 production files. Use a private copied string array wrapped with `Array.AsReadOnly`, `SequenceEqual(..., StringComparer.Ordinal)` and a matching HashCode accumulator. Raw ingress retains blankness; ToJsonTokens disambiguates literal zero. Parse/validation errors cannot print remote records.
+- [x] Run the targeted Python command and all Python tests. Self-review raw-versus-parsed zero, controls before trimming, absolute-prefix whitespace, empty relative path rejection and defensive ownership. Report C# fixtures uncompiled/unexecuted; no behavior-pass claim. Full discovery at that point reported the pending coordinator runner failures, not a green batch.
+- [x] Write the implementer report in the task workspace. Coordinator reviews spec/quality, resolves findings and commits exactly this task's paths; no agent git mutation.
 
 ## Task 2: Independent scratch/assertion infrastructure
 
+**Source gate:** reviewed complete at `a5221f2`; both task verdicts approved,
+no findings. C# execution and common runner integration remain separate gates.
+
 **Files/ownership:** Task 2 row only. **Consumes:** only System.IO and its own assertions. **Produces:** fixed Check/ScratchTree/suite contracts above. No dependency on production policy; may run in parallel with Task 1.
 
-- [ ] Write `ScratchTreeCases.cs` first: mutate a captured file/directory mode/inventory and assert detection; reject helper `../escape` and linked-parent writes; deliberately fail inside a linked tree then independently dispose it and verify a second owned target tree unchanged.
+- [x] Write `ScratchTreeCases.cs` first: mutate a captured file/directory mode/inventory and assert detection; reject helper `../escape` and linked-parent writes; deliberately fail inside a linked tree then independently dispose it and verify a second owned target tree unchanged.
 
 ```csharp
 using var outside = new ScratchTree();
@@ -145,12 +151,15 @@ Check.Equal("unchanged", System.IO.File.ReadAllText(sentinel));
 ```
 
 Expand the example with an unregistered link created directly under the owned root, wrong-root helper paths and explicit preservation of original plus cleanup failures. No real user settings or outside directories.
-- [ ] Add `tests/test_fixture_sources.py`; observe targeted structural red using `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_fixture_sources -v` before helpers exist.
-- [ ] Implement `Check.cs` and `ScratchTree.cs`; no production cleanup reuse and no `Directory.Delete(..., recursive: true)` fallback. Preserve the original Wine INI assertions in `WineIniCases.cs`, now using owned safe teardown. Do not edit Program.cs.
-- [ ] Run targeted/all Python tests. Source-review snapshot ownership, root/ancestor checks, directory modes, expected-absent snapshots, CWD restoration and link unlinking. C# remains unexecuted.
-- [ ] Write report; coordinator reviews and commits only owned paths, integrating Program separately.
+- [x] Add `tests/test_fixture_sources.py`; observe targeted structural red using `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_fixture_sources -v` before helpers exist.
+- [x] Implement `Check.cs` and `ScratchTree.cs`; no production cleanup reuse and no `Directory.Delete(..., recursive: true)` fallback. Preserve the original Wine INI assertions in `WineIniCases.cs`, now using owned safe teardown. Do not edit Program.cs.
+- [x] Run targeted Python tests plus the original baseline; full discovery deferred during peer/coordinator structural red. Source-review snapshot ownership, root/ancestor checks, directory modes, expected-absent snapshots, CWD restoration and link unlinking. C# remains unexecuted.
+- [x] Write report; coordinator reviews and commits only owned paths, integrating Program separately.
 
 ## Task 3: Manifest transport and one role-aware preparation
+
+**Source gate:** reviewed complete at `d8909ec`; both task verdicts approved,
+no findings. C# execution and complete installer/runner integration are separate.
 
 **Files/ownership:** Task 3 row only. **Consumes:** Task 1 InstructionSet/InputPolicy and Task 2 Check. **Produces:** typed `ModPackMakerRecord.Instructions`, converter, prepared record role/names, factory transport and instruction equality in both diffs. Direct downloadable constructors keep existing IList parameters in this batch; pass a fresh list from owned Paths. Their extraction entry guards/metadata lifecycle remain later integration, not claimed fixed here.
 
@@ -160,7 +169,7 @@ Selection precedence matches current factories: complete ModDB; metadata ModDB w
 
 Patch decision: null/blank JSON patch remains null/blank, rather than manufacturing `"- "`; this deliberately corrects role selection for a blank required author. Validate nonblank raw patch before adding exactly one `"- "` display prefix. Writer removes at most that exact prefix, not a set of leading characters. TSV retains its existing ordinary-whitespace trim and display representation; no unrelated author-format rewrite. Record this intentional compatibility change in the report.
 
-- [ ] Write `PathPolicyCases.cs` first: JSON/TSV literal-zero round trips, blank versus explicit-zero separator roles, blank JSON author, prefix/author fidelity, selected optional roles, supplied unsafe archive, comparison DTOs, equal-value hash and both diff consumers retaining unrelated identity/hash/author rules.
+- [x] Write `PathPolicyCases.cs` first: JSON/TSV literal-zero round trips, blank versus explicit-zero separator roles, blank JSON author, prefix/author fidelity, selected optional roles, supplied unsafe archive, comparison DTOs, equal-value hash and both diff consumers retaining unrelated identity/hash/author rules.
 
 ```csharp
 var records = new ModPackMakerRecordFactory().Create("Separator\t0\nSeparator\t");
@@ -172,18 +181,21 @@ var roundTrip = JsonSerializer.Deserialize(json, ModPackMakerCtx.Default.ModPack
 Check.True(parsed.Equals(roundTrip.Instructions), "production converter round trip");
 ```
 
-- [ ] Add/run `tests/test_record_policy_sources.py` for structural red before model/factory edits; prohibit old joining/reparsing and require owned transport/preparation wiring. No Python policy implementation.
-- [ ] Change Instructions to an InstructionSet value defaulting to Blank; converter handles JSON null explicitly, token-shape errors wrap UnsafePathException inside JsonException, and writes ToJsonTokens entry-by-entry. Update equality/hash consistently and only instruction comparisons in both diff methods.
-- [ ] TSV splits physical LF/CRLF lines without early TrimEntries; remove only terminal CRLF carriage return and inspect raw contributing fields before existing trims. Preserve absent trailing columns and ordinary blank physical lines. Feed raw instruction field to FromTsv.
-- [ ] Prepare the complete known list before returning selected records/separators. Remove the lossy private ProcessInstructions parser. Validate derived GitHub repository/archive components before construction; do not change network host selection or print rejected records.
-- [ ] Run targeted/all Python tests, inspect all eight pre-existing instruction references and JSON-context use; report changed equality/patch semantics explicitly. C#/source generation remains uncompiled/unexecuted.
-- [ ] Write report; coordinator performs task review and scoped commit, reserving DownloadableRecordFactory to this owner until task completion.
+- [x] Add/run `tests/test_record_policy_sources.py` for structural red before model/factory edits; prohibit old joining/reparsing and require owned transport/preparation wiring. No Python policy implementation.
+- [x] Change Instructions to an InstructionSet value defaulting to Blank; converter handles JSON null explicitly, token-shape errors wrap UnsafePathException inside JsonException, and writes ToJsonTokens entry-by-entry. Update equality/hash consistently and only instruction comparisons in both diff methods.
+- [x] TSV splits physical LF/CRLF lines without early TrimEntries; remove only terminal CRLF carriage return and inspect raw contributing fields before existing trims. Preserve absent trailing columns and ordinary blank physical lines. Feed raw instruction field to FromTsv.
+- [x] Prepare the complete known list before returning selected records/separators. Remove the lossy private ProcessInstructions parser. Validate derived GitHub repository/archive components before construction; do not change network host selection or print rejected records.
+- [x] Run targeted/all Python tests, inspect all eight pre-existing instruction references and JSON-context use; report changed equality/patch semantics explicitly. C#/source generation remains uncompiled/unexecuted. The discovery snapshot's peer/coordinator failures are recorded separately, not a green batch.
+- [x] Write report; coordinator performs task review and scoped commit, reserving DownloadableRecordFactory to this owner until task completion.
 
 ## Task 4: Typed strict path/tree inspection
 
+**Source gate:** reviewed complete at `fcac037`; both task verdicts approved,
+no findings. Canonical-path use in mutating operations remains Task 5 work.
+
 **Files/ownership:** Task 4 row only. **Consumes:** Task 1 InputPolicy/UnsafePathException and Task 2 ScratchTree/Check. **Produces:** fixed inspection contracts above for Task 5. No cache alias exception.
 
-- [ ] Write `FileSystemBoundaryCases.cs` first: lexical-only construction; relative configured root/stable base; sibling prefix/case differences; root/ancestor/leaf/intermediate contained/external/dangling/cyclic links; directory-versus-leaf expectations; missing-leaf versus suffix; tree start represented when missing; pre-cancellation and inaccessible/enumeration errors where test permissions permit.
+- [x] Write `FileSystemBoundaryCases.cs` first: lexical-only construction; relative configured root/stable base; sibling prefix/case differences; root/ancestor/leaf/intermediate contained/external/dangling/cyclic links; directory-versus-leaf expectations; missing-leaf versus suffix; tree start represented when missing; pre-cancellation and inaccessible/enumeration errors where test permissions permit.
 
 ```csharp
 using var tree = new ScratchTree();
@@ -198,21 +210,31 @@ tree.LinkFile("root/link", ordinary);
 Check.Throws<UnsafePathException>(() => boundary.CheckTree(root));
 ```
 
-- [ ] Add/run `tests/test_inspection_sources.py` for structural red before production files exist; classify these as wiring checks only.
-- [ ] Implement immutable entry/tree data and FileSystemBoundary. Check every existing prefix from `/`; reject ReparsePoint first. Normalize once and use returned canonical paths; do not use File.Exists/Directory.Exists to infer absence. Directory parents are required even when suffix creation is allowed.
-- [ ] Implement top-level-only tree materialization with inspected-kind descent; catch inspection and enumeration errors without swallowing cancellation. No public skip-link predicate, native ABI or claim that NonDirectory proves regular-file type. CheckTree includes root or explicit missing root.
-- [ ] Run targeted/all Python checks; compare new C# parser diagnostics against baseline with the installed parse-only interpreter, without compiling. Report target-runtime semantics unverified.
-- [ ] Write report; coordinator reviews/commits owned paths before Task 5 consumes this contract.
+- [x] Add/run `tests/test_inspection_sources.py` for structural red before production files exist; classify these as wiring checks only.
+- [x] Implement immutable entry/tree data and FileSystemBoundary. Check every existing prefix from `/`; reject ReparsePoint first. Normalize once and use returned canonical paths; do not use File.Exists/Directory.Exists to infer absence. Directory parents are required even when suffix creation is allowed.
+- [x] Implement top-level-only tree materialization with inspected-kind descent; catch inspection and enumeration errors without swallowing cancellation. No public skip-link predicate, native ABI or claim that NonDirectory proves regular-file type. CheckTree includes root or explicit missing root.
+- [x] Run targeted/all Python checks; compare new C# parser diagnostics against baseline with the installed parse-only interpreter, without compiling. Report target-runtime semantics unverified. Selected source/dry-run checks passed; full runner wiring remains a later gate.
+- [x] Write report; coordinator reviews/commits owned paths before Task 5 consumes this contract.
 
 ## Task 5: Complete managed-operation preparation and execution
+
+**Source gate:** reviewed complete at `b9eeaef`; both task verdicts approved,
+no findings. Helper-local stops are not whole-installer stop propagation.
 
 **Files/ownership:** Task 5 row only. **Consumes:** Tasks 1/2/4; independent of Task 3 files. **Produces:** strict public DirUtils operations, narrow internal ManagedCopyPlan, guarded instructions/cleanup/metadata/separator writes.
 
 Preserve the public CopyDirectory signature, NormalizePermissions(string), RecursivelyDeleteDirectory(string,IReadOnlyList<string>) and Separator interface. Add internal token-aware overloads where useful; `CountFiles(string, string?, CancellationToken = default)` may be internal. ProcessInstructions.Process(string,IList<string>,CancellationToken) validates/copies via InstructionSet.FromParsed, never reinterpreting literal zero. CleanExtractPath.Clean may add an optional CancellationToken without breaking existing calls.
 
+The reviewed `FromParsed` ingress accepts executable paths, not blank markers.
+For the legacy IList instruction boundary, first copy/check **every** member with
+internal `InputPolicy.PrepareValue(member, "instruction")`, omit empty results,
+then call FromParsed. Controls/null members still reject before no-op handling;
+literal `0` is never omitted. This adapter preserves the approved blank-marker
+no-op behavior without weakening the owned domain value.
+
 `ManagedCopyPlan` is internal and owns canonical source/destination boundaries, checked trees, selected/countable files, mapped directory/file targets and their execution order. `DirUtils.PrepareCopy(string sourceDir,string destDir,bool overwrite,string? fileFilter,bool moveFile,CancellationToken ct)` returns it; `DirUtils.ExecuteCopy(ManagedCopyPlan,Action<double>?,Action<string>?,CancellationToken)` executes. Public CopyDirectory calls those in order. Do not introduce a general operation DSL.
 
-- [ ] Write `ManagedTreeCases.cs` first, with separate owned trees per scenario. Capture source/destination **directory** modes/inventories plus external file bytes/modes and expected-absent outputs. Include deterministic later-item instruction/type failures; filesystem names alone do not prove traversal order.
+- [x] Write `ManagedTreeCases.cs` first, with separate owned trees per scenario. Capture source/destination **directory** modes/inventories plus external file bytes/modes and expected-absent outputs. Include deterministic later-item instruction/type failures; filesystem names alone do not prove traversal order.
 
 ```csharp
 using var outside = new ScratchTree();
@@ -233,21 +255,22 @@ outside.AssertUnchanged(outsideBefore);
 
 Required other cases: source/destination leaf/parent/root links and cycles; links in filtered/.git/retained cleanup content; later file→directory/directory→file mapped conflicts; safe identical paths; descendant rejection; ancestor flattening whose deeper output would overwrite an unread shallower source; overwrite/filter/nonempty selection; no unchecked count/hash; original cleanup dot-file/retained-directory selection; empty/no-op parsed instructions create nothing but check cancellation; later sources produced by earlier instructions; invalid second instruction before first move; linked meta.ini/invalid direct separator; callback cancellation including last callback prevents follow-up.
 
-- [ ] Add/run `tests/test_managed_tree_sources.py` for structural red before production edits. Check preparation-before-execution wiring and removal of unchecked AllDirectories walks, not behavior by marker count.
-- [ ] Prepare source/destination existing trees and **all mapped targets** before callbacks, hash opens or output creation. Validate target types, proposed file/parent conflicts, duplicate canonical mappings and overlap. Reject descendant destinations; check identical paths before safe no-op. For ancestor flattening order source files by increasing source depth so original shallower content is consumed before deeper mappings overwrite it. Never enumerate new outputs into source traversal.
-- [ ] Derive progress counts, filters and nonempty-directory selection from the same snapshot. Preserve `.git` substring selection, fileFilter, overwrite and cleanup selection without letting any filter hide a link. Recheck source/destination immediately before each I/O; token checks precede no-op returns and follow every progress/text callback, including the final callback.
-- [ ] Permission normalization preflights the whole tree before any mode/attribute change; retain the existing directory mode mask and file attribute behavior. Cleanup preflights retained and removed entries, deletes selected checked entries bottom-up without unchecked recursive fallback. CleanExtractPath shares one operation-owned preflight across chmod/selection; inspection failure cannot become a skipped permission error.
-- [ ] Instructions validate whole syntax/list and the existing extraction tree before mutation, including currently known selected source/destination types. Then prepare each instruction from current state, preserving sources created by earlier moves. Distinguish source-containing-gamedata flattening to root from ordinary-source flattening to root/gamedata; no destination inside source. Empty parsed lists/blank markers create nothing.
-- [ ] WriteAddonMetaIni validates archive component and checks root plus meta.ini leaf before its unchanged UTF-8/CRLF write. Separator validates FolderName at its public entry and checks mods/selected directory/meta.ini before creating anything; Name remains a display label. Keep existing INI content.
-- [ ] Run targeted/all Python checks and parse-only diagnostics. Review actual source ordering and snapshots; record unchanged mode policy and unexecuted C# behavior explicitly. Do not modify record extraction/alias/bootstrap code or claim installation compatibility in this intermediate batch.
-- [ ] Write report; coordinator reviews and commits only this task's paths.
+- [x] Add/run `tests/test_managed_tree_sources.py` for structural red before production edits. Check preparation-before-execution wiring and removal of unchecked AllDirectories walks, not behavior by marker count.
+- [x] Prepare source/destination existing trees and **all mapped targets** before callbacks, hash opens or output creation. Validate target types, proposed file/parent conflicts, duplicate canonical mappings and overlap. Reject descendant destinations; check identical paths before safe no-op. For ancestor flattening order source files by increasing source depth so original shallower content is consumed before deeper mappings overwrite it. Never enumerate new outputs into source traversal.
+- [x] Derive progress counts, filters and nonempty-directory selection from the same snapshot. Preserve `.git` substring selection, fileFilter, overwrite and cleanup selection without letting any filter hide a link. Recheck source/destination immediately before each I/O; token checks precede no-op returns and follow every progress/text callback, including the final callback.
+- [x] Permission normalization preflights the whole tree before any mode/attribute change; retain the existing directory mode mask and file attribute behavior. Cleanup preflights retained and removed entries, deletes selected checked entries bottom-up without unchecked recursive fallback. CleanExtractPath shares one operation-owned preflight across chmod/selection; inspection failure cannot become a skipped permission error.
+- [x] Instructions validate whole syntax/list and the existing extraction tree before mutation, including currently known selected source/destination types. Then prepare each instruction from current state, preserving sources created by earlier moves. Distinguish source-containing-gamedata flattening to root from ordinary-source flattening to root/gamedata; no destination inside source. Empty parsed lists/blank markers create nothing.
+- [x] WriteAddonMetaIni validates archive component and checks root plus meta.ini leaf before its unchanged UTF-8/CRLF write. Separator validates FolderName at its public entry and checks mods/selected directory/meta.ini before creating anything; Name remains a display label. Keep existing INI content.
+- [x] Run targeted/all Python checks and parse-only diagnostics. Review actual source ordering and snapshots; record unchanged mode policy and unexecuted C# behavior explicitly. Do not modify record extraction/alias/bootstrap code or claim installation compatibility in this intermediate batch.
+- [x] Write report; coordinator reviews and commits only this task's paths.
 
 ## Task 6: Coordinator integration, evidence and first-batch stop
 
 **Files/ownership:** Coordinator row only. **Consumes:** reviewed Tasks 1–5. **Produces:** registered runner, internal access, exact source-verification and remote-test handoff.
 
-- [ ] Add `Stalker.Gamma/Properties/AssemblyInfo.cs` containing only `using System.Runtime.CompilerServices;` and `[assembly: InternalsVisibleTo("LinuxRegression")]`; no CLI friend access.
-- [ ] Replace the old top-level runner with a Linux guard and named suite dispatch: `inputs`, `scratch`, `wine-ini`, `records`, `filesystem`, `managed-tree`. No arguments runs all registered suites; unknown arguments reject; do not execute it. Register only existing reviewed suite classes while tasks are integrating, so no references to future files enter commits.
+- [x] Before integration edits, add/run `tests/test_foundation_integration.py` for source-only red: narrow friend assembly and Linux/named-suite runner dispatch without inline recursive teardown. Register suites only after their owner is reviewed; runner checks can remain explicitly pending until then.
+- [x] Add `Stalker.Gamma/Properties/AssemblyInfo.cs` containing only `using System.Runtime.CompilerServices;` and `[assembly: InternalsVisibleTo("LinuxRegression")]`; no CLI friend access.
+- [x] Replace the old top-level runner with a Linux guard and named suite dispatch: `inputs`, `scratch`, `wine-ini`, `records`, `filesystem`, `managed-tree`. No arguments runs all registered suites; unknown arguments reject; do not execute it. Register only existing reviewed suite classes while tasks are integrating, so no references to future files enter commits.
 
 ```csharp
 var suites = new (string Name, Func<Task> Run)[]
@@ -258,8 +281,8 @@ var suites = new (string Name, Func<Task> Run)[]
 };
 ```
 
-- [ ] Record each actual structural red/green command/output separately from uncompiled/unexecuted C# fixture coverage in `tests/FILESYSTEM-REGRESSIONS.md`. Include the original 16-test baseline, task review findings/resolutions, intentional instruction equality/patch compatibility choices, missing alias integration and remaining inspector/runtime limitations.
-- [ ] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`, `git diff --check`, XML parses and the installed tree-sitter comparison from `2026-10-17-linux-only-fork.md:955–995`. Baseline `04d828e` diagnostics must not grow; parse-only is not compilation.
+- [x] Record each actual structural red/green command/output separately from uncompiled/unexecuted C# fixture coverage in `tests/FILESYSTEM-REGRESSIONS.md`. Include the original 16-test baseline, task review findings/resolutions, intentional instruction equality/patch compatibility choices, missing alias integration and remaining inspector/runtime limitations.
+- [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`, `git diff --check`, XML parses and the installed tree-sitter comparison from `2026-10-17-linux-only-fork.md:955–995`. Observed 76 Python source/dry-run methods OK, 147 C# files with no added diagnostics over six baseline diagnostic files, and six XML files parsed. Parse-only is not compilation.
 - [ ] Generate task-scoped review packages and a final first-batch diff package including new/untracked files, with a fresh read-only reviewer checking spec **and** quality. Resolve load-bearing findings through implementation agents and scoped re-review; no runtime/native/network command is allowed during review.
 - [ ] Inspect exact staged paths before every local commit; preserve ignored security evidence, existing worktree and unrelated files. Update task checkboxes/ledger only from real outputs and reviews. Commit integration/evidence separately.
 - [ ] Stop for user review. Report source implementation/review and local structural results, not C# correctness, full 4A completion or personal-use readiness. Cache/extractor/metadata/resume/installer integrations are later batches. Remote verification still needs separate consent and authenticated pinned build inputs.

@@ -10,8 +10,11 @@ dependencies, workflow execution, installers, containers, push or publication.
 
 Starting evidence: clean `linux-hardening` worktree at `a06783b`, whose changes
 are the filesystem implementation plan and design/discovery status documents.
-The current plan's inline/no-agent wording predates this new instruction.
-Production and regression-source implementation has not started.
+At that starting snapshot, the plan's inline/no-agent wording predated this new
+instruction, and production/regression-source implementation had not started.
+The investigative source findings below are that pre-implementation snapshot,
+not a claim about later commits. Current source progress and verification limits
+are recorded in `tests/FILESYSTEM-REGRESSIONS.md` and the revised foundations plan.
 
 The approved behavioral scope remains the strict-link, no-automatic-repair,
 checked-state-only Batch 4A design. Do not silently claim concurrency resistance,

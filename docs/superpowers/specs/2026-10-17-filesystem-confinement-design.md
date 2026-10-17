@@ -12,8 +12,10 @@ The user approved the functional design after selecting:
 - **No automatic repair:** an unexpected link or mismatched downloads directory
   stops the operation; do not replace, delete or migrate it automatically.
 
-This document specifies intended behavior, not implemented or runtime-verified
-protection. After the original planning checkpoint, the user requested parallel
+This document specifies intended behavior, not a claim that the complete design
+is implemented or runtime-verified. Source progress and verification limits are
+recorded separately in `tests/FILESYSTEM-REGRESSIONS.md`. After the original
+planning checkpoint, the user requested parallel
 implementation with subagents, preceded by architecture analysis. The subsequent
 **“adelante”** approves the presented architecture and the explicit GAMMA/cache
 layout restriction below. Continue with the revised first implementation batch;
