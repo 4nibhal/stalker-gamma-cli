@@ -12,7 +12,7 @@ ifeq ($(ARCH),x64)
 else ifeq ($(ARCH),arm64)
     CURL_ARCH := aarch64
 else
-    CURL_ARCH := unknown
+    $(error Unsupported ARCH '$(ARCH)' - use x64 or arm64)
 endif
 CURL_BUILD_DIR = $(BUILD_DIR)/curl-impersonate
 CURL_IMPERSONATE_ARCHIVE = $(CURL_BUILD_DIR)/libcurl-impersonate-$(CURL_IMPERSONATE_VERSION).$(CURL_ARCH)-linux-gnu.tar.gz
@@ -33,6 +33,7 @@ endif
 STALKER_GAMMA_BUILD_DIR = $(BUILD_DIR)/stalker-gamma-cli
 STALKER_RESOURCES_DIR = $(STALKER_GAMMA_BUILD_DIR)/resources
 STALKER_GAMMA_CLI_PROJECT = $(ROOT)/stalker-gamma-cli/stalker-gamma-cli.csproj
+STALKER_GAMMA_CLI_RID = linux-$(ARCH)
 
 STALKER_GAMMA_SERVER_BUILD_DIR = $(BUILD_DIR)/stalker-gamma-server
 STALKER_GAMMA_SERVER_PROJECT = $(ROOT)/stalker-gamma-cli-server/stalker-gamma-cli-server.csproj
@@ -67,7 +68,7 @@ build:
 
 	# build stalker-gamma-cli
 	mkdir $(STALKER_GAMMA_BUILD_DIR)
-	dotnet publish -c Release $(STALKER_GAMMA_CLI_PROJECT) -o $(STALKER_GAMMA_BUILD_DIR) -p:AssemblyVersion=$(VERSION)
+	dotnet publish -c Release "$(STALKER_GAMMA_CLI_PROJECT)" -r $(STALKER_GAMMA_CLI_RID) -o "$(STALKER_GAMMA_BUILD_DIR)" -p:AssemblyVersion=$(VERSION)
 
 	# cleanup stalker-gamma-cli debug files
 	rm $(STALKER_GAMMA_BUILD_DIR)/*.pdb
@@ -82,7 +83,7 @@ build:
 
 	# build stalker-gamma-server
 	mkdir $(STALKER_GAMMA_SERVER_BUILD_DIR)
-	dotnet publish -c Release $(STALKER_GAMMA_SERVER_PROJECT) -r $(STALKER_GAMMA_SERVER_RID) -o $(STALKER_GAMMA_SERVER_BUILD_DIR) -p:AssemblyVersion=$(VERSION)
+	dotnet publish -c Release "$(STALKER_GAMMA_SERVER_PROJECT)" -r $(STALKER_GAMMA_SERVER_RID) -o "$(STALKER_GAMMA_SERVER_BUILD_DIR)" -p:AssemblyVersion=$(VERSION)
 	rm -f $(STALKER_GAMMA_SERVER_BUILD_DIR)/*.pdb
 
 $(APPIMAGETOOL):

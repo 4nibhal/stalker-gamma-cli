@@ -1,7 +1,8 @@
-"""Source contracts only; these checks do not compile or execute C#."""
+"""Local source contracts and Make dry runs; no C# compilation or execution."""
 
 from pathlib import Path
 import re
+import subprocess
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -194,3 +195,112 @@ class LinuxCurlTests(unittest.TestCase):
                     ),
                     f"{path.relative_to(ROOT)}: non-Linux host selection remains",
                 )
+
+
+class LinuxDeliveryTests(unittest.TestCase):
+    def test_non_linux_packaging_files_are_removed(self):
+        for directory in ("build/win", "build/mac"):
+            with self.subTest(directory=directory):
+                self.assertEqual(
+                    [p for p in (ROOT / directory).rglob("*") if p.is_file()], []
+                )
+        self.assertFalse((ROOT / "build/update-cask.sh").exists())
+        for path in (
+            "build/linux/stalker-gamma.AppDir/AppRun",
+            "build/linux/stalker-gamma-server.AppDir/AppRun",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue((ROOT / path).is_file())
+
+    def test_make_dry_run_has_both_explicit_linux_rids(self):
+        for arch in ("x64", "arm64"):
+            with self.subTest(arch=arch):
+                result = subprocess.run(
+                    [
+                        "make",
+                        "--dry-run",
+                        "-C",
+                        str(ROOT / "build/linux"),
+                        "build",
+                        "appimage",
+                        f"ARCH={arch}",
+                        "VERSION=1.0.0",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=10,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                publish = [
+                    line
+                    for line in result.stdout.splitlines()
+                    if line.lstrip().startswith("dotnet publish ")
+                ]
+                self.assertEqual(len(publish), 2)
+                for line in publish:
+                    self.assertIn(f"-r linux-{arch}", line)
+
+    def test_make_rejects_unsupported_architecture(self):
+        result = subprocess.run(
+            [
+                "make",
+                "--dry-run",
+                "-C",
+                str(ROOT / "build/linux"),
+                "build",
+                "ARCH=riscv64",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        self.assertNotEqual(result.returncode, 0, "Unsupported ARCH was accepted")
+        self.assertIn("Unsupported ARCH", result.stderr)
+
+    def test_ci_is_manual_linux_only_and_non_publishing(self):
+        text = source(".github/workflows/build.yml")
+        event_section = re.search(r"(?ms)^on:\n(.*?)(?=^[^\s#])", text)
+        self.assertIsNotNone(event_section)
+        self.assertEqual(
+            re.findall(r"^  ([\w-]+):", event_section.group(1), re.M),
+            ["workflow_dispatch"],
+        )
+        self.assertIsNotNone(
+            re.search(r"(?m)^permissions:\n  contents: read$", text),
+            "Read-only workflow token permission missing",
+        )
+        jobs_section = text.split("\njobs:\n", 1)[1]
+        self.assertEqual(
+            re.findall(r"^  ([\w-]+):", jobs_section, re.M),
+            ["lint", "version", "build"],
+        )
+        for forbidden in (
+            "windows-",
+            "macos-",
+            "secrets.",
+            "update-aur:",
+            "update-chocolatey:",
+            "update-homebrew:",
+            "publish-release:",
+            "action-gh-release",
+            "git push",
+            "inputs.dry_run",
+        ):
+            with self.subTest(symbol=forbidden):
+                self.assertFalse(forbidden in text, f"Inherited CI behavior: {forbidden}")
+        for required in (
+            "ubuntu-22.04-arm",
+            "ubuntu-22.04",
+            "tests/LinuxRegression/LinuxRegression.csproj",
+            "persist-credentials: false",
+            "sha256sum",
+            "SHA256SUMS-linux.",
+        ):
+            with self.subTest(symbol=required):
+                self.assertTrue(required in text, f"Linux CI contract missing: {required}")
+        self.assertEqual(
+            len(re.findall(r"uses: actions/checkout@", text)),
+            text.count("persist-credentials: false"),
+        )
