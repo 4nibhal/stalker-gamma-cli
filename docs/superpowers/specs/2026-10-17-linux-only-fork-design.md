@@ -130,6 +130,7 @@ security requirements remain applicable to the later stages.
 - [x] User review of the initial written specification.
 - [x] User review of the remote-compilation/no-local-compiler clarification.
 - [x] Write implementation plan.
-- [x] Add and run initial failing source-invariant tests (Tasks 1-2); later task-specific contracts remain to be added.
+- [x] Add and run failing source-invariant tests for Tasks 1-4; Tasks 5-6 contracts remain to be added.
+- [x] Complete source conversion for the host boundary, installer wiring, runtime adapters and native curl (Tasks 1-4); local static checks only, remote .NET/runtime verification not run.
 - [ ] Remove non-Linux host support and fork-unsafe publishing.
 - [ ] Run available checks and report .NET verification blockers explicitly.

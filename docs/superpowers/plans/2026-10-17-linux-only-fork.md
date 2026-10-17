@@ -55,7 +55,7 @@ Before staging each task, inspect `git status --short` and the diff. Stage only 
 
 - [x] User selected inline execution in batches, without subagents.
 - [x] Batch 1: Tasks 1-2; local checks recorded below, paused for user review.
-- [ ] Batch 2: Tasks 3-4.
+- [x] Batch 2: Tasks 3-4; local checks recorded below, paused for user review.
 - [ ] Batch 3: Tasks 5-6.
 
 The existing `linux-hardening` linked worktree was verified clean before source
@@ -327,7 +327,7 @@ not run, and the application is not presented as ready to install.
 - Consumes: existing Linux extraction mappings, `WriteModOrganizerIni.WriteAsync(string, string, string, IList<string>, string)` with its default selected profile, and tool settings.
 - Produces: `ArchiveService(SevenZipService sevenZipService, UnzipService unzipService)` with the same `ExtractAsync` signature; Linux tool names; unchanged Wine INI payload; isolated remote regression executable.
 
-- [ ] **Step 1: Append failing Linux adapter contracts.**
+- [x] **Step 1: Append failing Linux adapter contracts.**
 
 ```python
 class LinuxRuntimeTests(unittest.TestCase):
@@ -367,11 +367,16 @@ class LinuxRuntimeTests(unittest.TestCase):
         self.assertIn("ArgumentList.Add(Path.GetFullPath(path))", text)
 ```
 
-- [ ] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxRuntimeTests -v`.**
+- [x] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxRuntimeTests -v`.**
 
 Expected: failure on the existing host branches, archive constructor, and quoted desktop argument string. Wine payload assertions characterize existing behavior.
 
-- [ ] **Step 3: Simplify archive selection without changing extraction policy.**
+Observed before implementation: 3 test methods ran with 13 assertion failures
+(11 non-Linux adapter selections, the desktop opener configuration, and the
+archive's tar dependency). There were no test errors. Missing-symbol checks use
+concise assertions rather than printing complete source files on failure.
+
+- [x] **Step 3: Simplify archive selection without changing extraction policy.**
 
 Remove `TarService` from `ArchiveService`'s constructor. Remove the outer Windows branch, retaining the existing file-header lookup and `try/finally` permissions call. Replace the ZIP mapping with:
 
@@ -405,7 +410,7 @@ Replace tool selections exactly as follows:
 
 In `DirUtils.NormalizePermissions`, remove only the Windows guard and unindent its Unix mode assignment. Do not change the mode mask in this conversion: restrictive permissions require their own regression tests in the next security stage. Remove the obsolete Windows comment in `AnomalyInstaller`. Replace `NetworkService.Ready`'s stale comment with: `Readiness placeholder; this does not verify native library availability.` Do not turn its constant `true` into a claimed real readiness probe.
 
-- [ ] **Step 4: Preserve the current Wine path transformation explicitly.**
+- [x] **Step 4: Preserve the current Wine path transformation explicitly.**
 
 Replace only the initial path calculation in `WriteModOrganizerIni.WriteAsync`:
 
@@ -436,7 +441,7 @@ Process.Start(startInfo);
 
 Remove `using System.Runtime.InteropServices;` from that helper. This one argument change accompanies removal of its host dispatch; the general `RunProcessUtility` hardening remains separate.
 
-- [ ] **Step 5: Add the isolated remote characterization test, without executing it locally.**
+- [x] **Step 5: Add the isolated remote characterization test, without executing it locally.**
 
 `tests/LinuxRegression/LinuxRegression.csproj`:
 
@@ -499,7 +504,11 @@ finally
 
 This executes only the INI writer in a fresh runner-owned directory. It does not start the CLI, installer, game, native curl, browser, or container. It is characterization of preserved behavior, not a demonstrated red/green security fix.
 
-- [ ] **Step 6: Re-run local contracts and inspect the diff.**
+The regression source was added without running it. Context7 did not surface
+the requested temporary-directory API reference; its .NET 10 signature and
+unique directory behavior were checked on [Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/system.io.directory.createtempsubdirectory?view=net-10.0).
+
+- [x] **Step 6: Re-run local contracts and inspect the diff.**
 
 ```bash
 python3 -m unittest tests.test_linux_only -v
@@ -508,12 +517,27 @@ git diff --check
 
 Remote-only command for a separately authorized CI run: `dotnet run --project tests/LinuxRegression/LinuxRegression.csproj -c Release`. Do not run it locally.
 
-- [ ] **Step 7: Commit only the listed runtime/test files.**
+Observed after implementation: all 8 current source-contract tests pass;
+`git diff --check` reports no whitespace errors. The parse-only comparison
+checks 128 application C# files and the new regression source: 6 retain
+baseline diagnostics, with no additional diagnostics. All 6 project/property
+XML files parse, and the regression's project reference resolves on disk.
+Source comparison confirms that the INI writer from `modOrganizerIniPath`
+onward is identical to baseline and the Unix permission mask is unchanged.
+Inline diff review checked the four extraction mappings, preserved
+`try/finally`, Linux prerequisites, and DI registration; there is no direct
+`new ArchiveService` call in the C# source scan. The regression was reviewed
+as source only; neither C# compilation nor the regression executable has run.
+No independent subagent review was performed, per the user's inline choice.
+
+- [x] **Step 7: Commit only the listed runtime/test files.**
 
 ```bash
 git add -- tests/test_linux_only.py tests/LinuxRegression Stalker.Gamma/Services/ArchiveService.cs Stalker.Gamma/Services/SevenZipService.cs Stalker.Gamma/Services/TarService.cs Stalker.Gamma/Services/UnzipService.cs Stalker.Gamma/Models/StalkerGammaSettings.cs Stalker.Gamma/Utilities/DirUtils.cs Stalker.Gamma/ModOrganizer/WriteModOrganizerIni.cs Stalker.Gamma/GammaInstallerServices/AnomalyInstaller.cs Stalker.Gamma/Services/NetworkService.cs stalker-gamma-cli/Services/SetupUtilitiesService.cs stalker-gamma-cli/Commands/Anomaly.cs stalker-gamma-cli/Utilities/UtilitiesReady.cs stalker-gamma-cli/Utilities/FileExplorerHelper.cs
 git commit -m "refactor: select Linux tools and preserve Wine configuration"
 ```
+
+Local commit: `5b57c9e`. No push or remote execution was performed.
 
 ### Task 4: Remove Non-Linux Native Curl Bindings
 
@@ -525,7 +549,7 @@ git commit -m "refactor: select Linux tools and preserve Wine configuration"
 - Consumes: existing Linux P/Invoke declarations ending in `_impl` and their callback types.
 - Produces: the same six public-to-assembly wrapper signatures, now directly calling the Linux declarations; only `libcurl-impersonate.so` is resolved. No ABI redesign or native-library download.
 
-- [ ] **Step 1: Append the failing curl contracts.**
+- [x] **Step 1: Append the failing curl contracts.**
 
 ```python
 class LinuxCurlTests(unittest.TestCase):
@@ -545,11 +569,16 @@ class LinuxCurlTests(unittest.TestCase):
                 self.assertNotRegex(path.read_text(encoding="utf-8"), r"OperatingSystem\.IsWindows|OSPlatform\.(Windows|OSX)")
 ```
 
-- [ ] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxCurlTests -v`.**
+- [x] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxCurlTests -v`.**
 
 Expected: resolver and wrapper checks fail on the existing bindings.
 
-- [ ] **Step 3: Make the existing Linux implementation unconditional.**
+Observed before implementation: both test methods fail, with 2 assertion
+failures (the multi-host native resolver and the remaining host selection in
+`LibCurl.cs`). There were no test errors. The wrapper checks are after the
+resolver assertion and are not presented as separately observed red tests.
+
+- [x] **Step 3: Make the existing Linux implementation unconditional.**
 
 Keep the resolver's unrelated-library check, followed by:
 
@@ -581,19 +610,42 @@ internal static int curl_easy_setopt_xcb(IntPtr h, int opt, XferInfoCallback v) 
 
 Preserve all constants, callback signatures, string marshalling, and `long`/pointer widths. Do not claim Linux arm64 ABI correctness from these source tests.
 
-- [ ] **Step 4: Run all local contracts and whitespace checks.**
+- [x] **Step 4: Run all local contracts and whitespace checks.**
 
 ```bash
 python3 -m unittest tests.test_linux_only -v
 git diff --check
 ```
 
-- [ ] **Step 5: Commit the curl change.**
+Observed after implementation: all 10 current source-contract tests pass;
+`git diff --check` reports no whitespace errors. The parse-only comparison
+checks 128 application C# files and 1 regression source, retaining the 6
+baseline-diagnostic files with no additional diagnostics. Source comparison
+confirms that common imports, all six Linux P/Invoke declarations, all six
+wrapper signatures, callbacks and constants match the application baseline.
+A C# scan finds no `OperatingSystem.IsWindows`, `OperatingSystem.IsMacOS`,
+`OSPlatform.Windows`, `OSPlatform.OSX`, `_isMacOsArm64`, or
+`macos_arm64_impl` occurrences. Inline review checked the unrelated-library
+resolver fallback and direct wrapper arguments. No native library was loaded;
+Linux x64/arm64 ABI correctness and native behavior remain unverified.
+
+- [x] **Step 5: Commit the curl change.**
 
 ```bash
 git add -- tests/test_linux_only.py LibCurlImpersonate/LibCurl.cs
 git commit -m "refactor: retain only Linux curl native bindings"
 ```
+
+Local commit: `ff59711`. Together with `5b57c9e`, this completes the source
+changes for Batch 2. The isolated Wine INI regression has been added, not run.
+The 10 local source-contract tests pass, and parser checks add no diagnostics
+relative to the baseline; these are not compilation or native/runtime tests.
+No artifact download, SDK installation, installer execution, server/container
+startup, CI dispatch, push, merge, or public disclosure was performed in this
+batch. Extraction confinement, restrictive permissions, download validation,
+server controls and immutable build inputs remain later security work.
+Tasks 5-6 (packaging, non-publishing manual CI, and documentation) have not
+started. Pause here for the user's next batch review.
 
 ### Task 5: Retain Linux Packaging and Replace Inherited Publishing CI
 
