@@ -64,6 +64,11 @@ conversion.
 ## Build, CI, and documentation
 
 - Retain Linux x64/arm64 build and AppImage support.
+- Preserve the existing deployment distinction: the CLI inherits NativeAOT from
+  `Directory.Build.props`; the optional server explicitly disables AOT and bundles
+  its runtime (`stalker-gamma-cli-server/stalker-gamma-cli-server.csproj:7-9`).
+  Neither deployment requires a compiler on the user's machine. Do not force the
+  server into AOT as part of this conversion.
 - Remove `build/win/`, `build/mac/`, Homebrew cask generation, and Windows package
   publication. Remove inherited automatic publication to the upstream's AUR,
   Chocolatey, Homebrew and release destinations.
@@ -87,6 +92,11 @@ conversion.
   non-publishing CI.
 - Inspect parsing of changed C# with the installed parser and run available
   shell/static checks. These are not substitutes for compiling C#.
+- Compare parser diagnostics against the unchanged source baseline rather than
+  declaring the entire tree syntax-clean. The installed Tree-sitter grammar
+  flags existing conditional method declarations in four generated clients and
+  inferred `ref` lambdas in `Commands/Anomaly.cs` and `Utilities/HashUtility.cs`.
+  Do not rewrite those unrelated constructs merely to satisfy this parser.
 - The user explicitly selected compilation in GitHub Actions, with no local C#
   compiler or SDK. Do not install a toolchain or try local .NET build/restore/test
   commands. Local checks use existing parsers and standard-library Python tests.
@@ -118,8 +128,8 @@ security requirements remain applicable to the later stages.
 - [x] Create an ignored isolated worktree and configure origin/upstream.
 - [x] Record Linux-only design and explicit runtime-verification limits.
 - [x] User review of the initial written specification.
-- [ ] User review of the remote-compilation/no-local-compiler clarification.
-- [ ] Write implementation plan.
+- [x] User review of the remote-compilation/no-local-compiler clarification.
+- [x] Write implementation plan.
 - [ ] Add and run failing source-invariant tests.
 - [ ] Remove non-Linux host support and fork-unsafe publishing.
 - [ ] Run available checks and report .NET verification blockers explicitly.
