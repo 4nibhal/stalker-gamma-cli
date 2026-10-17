@@ -8,7 +8,6 @@ using stalker_gamma_cli.Utilities;
 using Stalker.Gamma.GammaInstallerServices;
 using Stalker.Gamma.GammaInstallerServices.GammaInstaller;
 using Stalker.Gamma.Models;
-using Stalker.Gamma.Services;
 
 namespace stalker_gamma_cli.Commands;
 
@@ -19,7 +18,6 @@ public class FullInstallCmd(
     StalkerGammaSettings stalkerGammaSettings,
     IGammaInstaller gammaInstaller,
     OfflineGammaInstaller offlineGammaInstaller,
-    PowerShellCmdBuilder powerShellCmdBuilder,
     UtilitiesReady utilitiesReady,
     ProgressLoggingService progressLoggingService
 )
@@ -30,8 +28,6 @@ public class FullInstallCmd(
     /// <param name="cancellationToken"></param>
     /// <param name="skipGithubDownloads">Disable downloading GitHub addons. They will still download if these archives do not exist.</param>
     /// <param name="skipExtractOnHashMatch">Skip extracting archives when their MD5 hashes match</param>
-    /// <param name="addFoldersToWinDefenderExclusion">(Windows) Add the anomaly, gamma, and cache folders to the Windows Defender Exclusion list</param>
-    /// <param name="enableLongPaths">(Windows) Enable long paths</param>
     /// <param name="verbose">More verbose logging</param>
     /// <param name="minimal">Delete cache files after extracting. Could be useful for space-constrained devices but increases the chance of installation failure and will make updates much slower. This will take about ~100GB.</param>
     /// <param name="offline">Perform an offline installation from a cache. This will not download anything if you combine this with --mod-pack-maker-path and --mod-list-path</param>
@@ -48,8 +44,6 @@ public class FullInstallCmd(
         CancellationToken cancellationToken,
         bool skipGithubDownloads = false,
         bool skipExtractOnHashMatch = false,
-        bool addFoldersToWinDefenderExclusion = false,
-        bool enableLongPaths = false,
         bool verbose = false,
         bool minimal = false,
         bool offline = false,
@@ -86,14 +80,6 @@ public class FullInstallCmd(
             out var gamma,
             out var cache,
             out var mo2Profile
-        );
-
-        ConfigurePowerShellSettings(
-            addFoldersToWinDefenderExclusion,
-            enableLongPaths,
-            gamma,
-            anomaly,
-            cache
         );
 
         var installer = offline ? _offlineGammaInstaller : _gammaInstaller;
@@ -218,31 +204,6 @@ public class FullInstallCmd(
         _stalkerGammaSettings.StalkerGammaServerUrl = stalkerGammaServerUrl;
     }
 
-    private void ConfigurePowerShellSettings(
-        bool addFoldersToWinDefenderExclusion,
-        bool enableLongPaths,
-        string gamma,
-        string anomaly,
-        string cache
-    )
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            if (addFoldersToWinDefenderExclusion)
-            {
-                _powerShellCmdBuilder.WithWindowsDefenderExclusions(
-                    Path.GetFullPath(gamma),
-                    Path.GetFullPath(anomaly),
-                    Path.GetFullPath(cache)
-                );
-            }
-            if (enableLongPaths)
-            {
-                _powerShellCmdBuilder.WithEnableLongPaths();
-            }
-        }
-    }
-
     private void SetUpLogging(
         IGammaInstaller installer,
         bool verbose,
@@ -315,7 +276,6 @@ public class FullInstallCmd(
     private readonly StalkerGammaSettings _stalkerGammaSettings = stalkerGammaSettings;
     private readonly IGammaInstaller _gammaInstaller = gammaInstaller;
     private readonly OfflineGammaInstaller _offlineGammaInstaller = offlineGammaInstaller;
-    private readonly PowerShellCmdBuilder _powerShellCmdBuilder = powerShellCmdBuilder;
     private readonly ProgressLoggingService _progressLoggingService = progressLoggingService;
 
     private const string ResumeCommand = "full-install";

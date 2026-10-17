@@ -20,7 +20,6 @@ public class OfflineGammaInstaller(
     IModListRecordFactory modListRecordFactory,
     ISeparatorsFactory separatorsFactory,
     IHttpClientFactory hcf,
-    PowerShellCmdBuilder powerShellCmdBuilder,
     IGetStalkerModsFromLocal getStalkerModsFromLocal,
     PreserveUserLtxSettingsService preserveUserLtxSettingsService,
     PreserveMcmSettings preserveMcmSettings,
@@ -35,7 +34,6 @@ public class OfflineGammaInstaller(
         modListRecordFactory,
         separatorsFactory,
         hcf,
-        powerShellCmdBuilder,
         getStalkerModsFromLocal,
         preserveUserLtxSettingsService,
         preserveMcmSettings,
@@ -59,11 +57,7 @@ public class OfflineGammaInstaller(
         Directory.CreateDirectory(args.Gamma);
         Directory.CreateDirectory(args.Cache);
         Directory.CreateDirectory(gammaModsPath);
-        CreateSymbolicLinkUtility.Create(gammaDownloadsPath, args.Cache, PowerShellCmdBuilder);
-        if (OperatingSystem.IsWindows())
-        {
-            await PowerShellCmdBuilder.Build().ExecuteAsync(args.CancellationToken);
-        }
+        CreateSymbolicLinkUtility.Create(gammaDownloadsPath, args.Cache);
 
         if (args.PreserveUserLtx)
         {

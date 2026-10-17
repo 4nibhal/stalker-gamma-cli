@@ -63,3 +63,33 @@ class LinuxHostTests(unittest.TestCase):
         ):
             with self.subTest(property=name):
                 self.assertEqual(project.findtext(f".//{name}"), expected)
+
+
+class LinuxInstallerTests(unittest.TestCase):
+    def test_no_elevated_windows_setup_remains(self):
+        self.assertFalse((ROOT / "Stalker.Gamma/Services/PowerShellCmd.cs").exists())
+        for path in application_sources():
+            text = path.read_text(encoding="utf-8")
+            for forbidden in (
+                "PowerShellCmd",
+                "addFoldersToWinDefenderExclusion",
+                "enableLongPaths",
+                "ConfigurePowerShellSettings",
+            ):
+                with self.subTest(path=str(path.relative_to(ROOT)), symbol=forbidden):
+                    self.assertFalse(forbidden in text, f"Stale Windows setup: {forbidden}")
+
+    def test_both_installers_use_the_two_argument_link_helper(self):
+        for name in ("GammaInstaller", "OfflineGammaInstaller"):
+            with self.subTest(installer=name):
+                text = source(
+                    "Stalker.Gamma/GammaInstallerServices/GammaInstaller/"
+                    f"{name}.cs"
+                )
+                expected = (
+                    "CreateSymbolicLinkUtility.Create(gammaDownloadsPath, args.Cache);"
+                )
+                self.assertTrue(expected in text, f"{name}: two-argument link call missing")
+        helper = source("Stalker.Gamma/Utilities/CreateSymbolicLinkUtility.cs")
+        self.assertIn("Directory.CreateSymbolicLink(path, pathToTarget);", helper)
+        self.assertNotIn("OperatingSystem.IsWindows", helper)

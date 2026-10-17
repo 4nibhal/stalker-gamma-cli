@@ -1,25 +1,12 @@
-using Stalker.Gamma.Services;
-
 namespace Stalker.Gamma.Utilities;
 
 public static class CreateSymbolicLinkUtility
 {
-    public static void Create(
-        string path,
-        string pathToTarget,
-        PowerShellCmdBuilder powerShellCmdBuilder
-    )
+    public static void Create(string path, string pathToTarget)
     {
         if (!Directory.Exists(path))
         {
-            if (OperatingSystem.IsWindows())
-            {
-                powerShellCmdBuilder.WithCreateSymbolicLink(path, pathToTarget);
-            }
-            else
-            {
-                Directory.CreateSymbolicLink(path, pathToTarget);
-            }
+            Directory.CreateSymbolicLink(path, pathToTarget);
         }
     }
 }
