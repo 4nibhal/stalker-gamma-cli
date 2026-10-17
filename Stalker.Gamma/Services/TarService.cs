@@ -22,9 +22,7 @@ public class TarService(StalkerGammaSettings settings)
         );
     }
 
-    public bool Ready =>
-        File.Exists(settings.PathToTar)
-        || EnvChecker.IsInPath(OperatingSystem.IsWindows() ? "tar.exe" : "tar");
+    public bool Ready => File.Exists(settings.PathToTar) || EnvChecker.IsInPath("tar");
 
     private async Task<StdOutStdErrOutput> ExecuteTarCmdAsync(
         string[] args,

@@ -6,10 +6,7 @@ public class SetupUtilitiesService(StalkerGammaSettings settings)
 {
     public void Setup()
     {
-        settings.PathTo7Z = Path.Join(
-            ResourcesPath,
-            OperatingSystem.IsWindows() ? "7zz.exe" : "7zz"
-        );
+        settings.PathTo7Z = Path.Join(ResourcesPath, "7zz");
     }
 
     private static readonly string ResourcesPath = Path.Join(

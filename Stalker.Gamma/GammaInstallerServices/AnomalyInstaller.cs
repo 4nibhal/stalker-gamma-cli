@@ -76,7 +76,6 @@ public class AnomalyInstaller(
     {
         try
         {
-            // TODO: This likely needs an extra extract on Windows
             if (File.Exists(DownloadPathZstd))
             {
                 await _archiveService.ExtractAsync(

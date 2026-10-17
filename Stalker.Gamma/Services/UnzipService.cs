@@ -19,9 +19,7 @@ public class UnzipService(StalkerGammaSettings settings)
             cancellationToken: ct
         );
 
-    public bool Ready =>
-        File.Exists(settings.PathToUnzip)
-        || EnvChecker.IsInPath(OperatingSystem.IsWindows() ? "unzip.exe" : "unzip");
+    public bool Ready => File.Exists(settings.PathToUnzip) || EnvChecker.IsInPath("unzip");
 
     private async Task<StdOutStdErrOutput> ExecuteUnzipCmdAsync(
         string[] args,

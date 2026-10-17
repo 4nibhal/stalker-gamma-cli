@@ -14,8 +14,8 @@ public class UtilitiesReady(
         networkServiceFactory.Create().Ready
         && GitService.Ready
         && sevenZipService.Ready
-        && (OperatingSystem.IsWindows() || tarService.Ready)
-        && (OperatingSystem.IsWindows() || unzipService.Ready);
+        && tarService.Ready
+        && unzipService.Ready;
 
     public string NotReadyReason =>
         IsReady

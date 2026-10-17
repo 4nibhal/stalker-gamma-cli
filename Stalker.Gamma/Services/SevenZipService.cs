@@ -29,9 +29,7 @@ public partial class SevenZipService(StalkerGammaSettings settings)
         );
     }
 
-    public bool Ready =>
-        File.Exists(PathTo7Z)
-        || EnvChecker.IsInPath(OperatingSystem.IsWindows() ? "7zz.exe" : "7zz");
+    public bool Ready => File.Exists(PathTo7Z) || EnvChecker.IsInPath("7zz");
 
     private async Task<StdOutStdErrOutput> ExecuteSevenZipCmdAsync(
         string[] args,

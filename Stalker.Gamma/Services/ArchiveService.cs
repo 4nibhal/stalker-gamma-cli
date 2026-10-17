@@ -2,11 +2,7 @@ using Stalker.Gamma.Utilities;
 
 namespace Stalker.Gamma.Services;
 
-public class ArchiveService(
-    SevenZipService sevenZipService,
-    TarService tarService,
-    UnzipService unzipService
-)
+public class ArchiveService(SevenZipService sevenZipService, UnzipService unzipService)
 {
     public async Task ExtractAsync(
         string archivePath,
@@ -15,42 +11,30 @@ public class ArchiveService(
         CancellationToken ct
     )
     {
-        if (OperatingSystem.IsWindows())
+        await using var fs = File.OpenRead(archivePath);
+        fs.Seek(0, SeekOrigin.Begin);
+        if (_archiveMappings.TryGetValue(fs.ReadByte(), out var extractFunc))
         {
-            await sevenZipService.ExtractAsync(
-                archivePath,
-                destinationDir,
-                pct,
-                cancellationToken: ct
-            );
+            try
+            {
+                await extractFunc.Invoke(
+                    new ArchiveMappingArgs(archivePath, destinationDir, pct, ct)
+                );
+            }
+            finally
+            {
+                // Permissions are a pain in my ass
+                DirUtils.NormalizePermissions(destinationDir);
+            }
         }
         else
         {
-            await using var fs = File.OpenRead(archivePath);
-            fs.Seek(0, SeekOrigin.Begin);
-            if (_archiveMappings.TryGetValue(fs.ReadByte(), out var extractFunc))
-            {
-                try
-                {
-                    await extractFunc.Invoke(
-                        new ArchiveMappingArgs(archivePath, destinationDir, pct, ct)
-                    );
-                }
-                finally
-                {
-                    // Permissions are a pain in my ass
-                    DirUtils.NormalizePermissions(destinationDir);
-                }
-            }
-            else
-            {
-                throw new ArchiveUtilityException(
-                    $"""
-                    Unsupported archive type
-                    Archive: {archivePath}
-                    """
-                );
-            }
+            throw new ArchiveUtilityException(
+                $"""
+                Unsupported archive type
+                Archive: {archivePath}
+                """
+            );
         }
     }
 
@@ -66,7 +50,6 @@ public class ArchiveService(
         {
             // zstd
             // linux -> 7z
-            // mac -> 7z
             0x28,
             async args =>
                 await sevenZipService.ExtractAsync(
@@ -79,7 +62,6 @@ public class ArchiveService(
         {
             // 7z
             // linux -> 7z
-            // mac -> 7z
             0x37,
             async args =>
                 await sevenZipService.ExtractAsync(
@@ -90,36 +72,19 @@ public class ArchiveService(
                 )
         },
         {
-            // zip
-            // linux -> unzip
-            // mac -> tar
+            // zip -> unzip on Linux
             0x50,
             async args =>
-            {
-                if (OperatingSystem.IsLinux())
-                {
-                    await unzipService.ExtractAsync(
-                        args.ArchivePath,
-                        args.DestinationDir,
-                        args.Pct,
-                        args.Ct
-                    );
-                }
-                else
-                {
-                    await tarService.ExtractAsync(
-                        args.ArchivePath,
-                        args.DestinationDir,
-                        args.Pct,
-                        args.Ct
-                    );
-                }
-            }
+                await unzipService.ExtractAsync(
+                    args.ArchivePath,
+                    args.DestinationDir,
+                    args.Pct,
+                    args.Ct
+                )
         },
         {
             // rar
             // linux -> 7z
-            // mac -> 7z
             0x52,
             async args =>
                 await sevenZipService.ExtractAsync(

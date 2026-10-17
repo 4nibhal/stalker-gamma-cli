@@ -57,7 +57,7 @@ public class NetworkService(
         );
 
     /// <summary>
-    /// Whether curl service found curl-impersonate-win.exe and can execute.
+    /// Readiness placeholder; this does not verify native library availability.
     /// </summary>
     public bool Ready => true;
 

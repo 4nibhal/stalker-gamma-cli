@@ -10,20 +10,16 @@ public static class WriteModOrganizerIni
         string selectedProfile = "G.A.M.M.A"
     )
     {
-        var drivePrefix = OperatingSystem.IsWindows() ? "C:" : "Z:";
-        var gammaPathWithDrivePrefix = (
-            OperatingSystem.IsWindows() && Path.IsPathRooted(gammaPath)
-                ? gammaPath
-                : Path.Join(drivePrefix, Path.GetFullPath(gammaPath))
+        const string drivePrefix = "Z:";
+        var gammaPathWithDrivePrefix = Path.Join(
+            drivePrefix,
+            Path.GetFullPath(gammaPath)
         ).Replace(@"\", "/");
-        var anomalyPathWithDrivePrefix = (
-            OperatingSystem.IsWindows() && Path.IsPathRooted(anomalyPath)
-                ? anomalyPath
-                : Path.Join(drivePrefix, Path.GetFullPath(anomalyPath))
+        var anomalyPathWithDrivePrefix = Path.Join(
+            drivePrefix,
+            Path.GetFullPath(anomalyPath)
         ).Replace(@"\", "/");
-        var escapedWinAnomalyPath = OperatingSystem.IsWindows()
-            ? anomalyPathWithDrivePrefix.Replace(@"\", @"\\")
-            : anomalyPathWithDrivePrefix.TrimEnd('/').Replace("/", @"\\");
+        var escapedWinAnomalyPath = anomalyPathWithDrivePrefix.TrimEnd('/').Replace("/", @"\\");
         var modOrganizerIniPath = Path.Join(gammaPath, "ModOrganizer.ini");
         await File.WriteAllTextAsync(
             modOrganizerIniPath,

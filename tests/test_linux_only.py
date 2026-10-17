@@ -1,6 +1,7 @@
 """Source contracts only; these checks do not compile or execute C#."""
 
 from pathlib import Path
+import re
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -93,3 +94,58 @@ class LinuxInstallerTests(unittest.TestCase):
         helper = source("Stalker.Gamma/Utilities/CreateSymbolicLinkUtility.cs")
         self.assertIn("Directory.CreateSymbolicLink(path, pathToTarget);", helper)
         self.assertNotIn("OperatingSystem.IsWindows", helper)
+
+
+class LinuxRuntimeTests(unittest.TestCase):
+    def test_runtime_adapters_have_no_non_linux_host_branches(self):
+        paths = (
+            "Stalker.Gamma/Services/ArchiveService.cs",
+            "Stalker.Gamma/Services/SevenZipService.cs",
+            "Stalker.Gamma/Services/TarService.cs",
+            "Stalker.Gamma/Services/UnzipService.cs",
+            "Stalker.Gamma/Models/StalkerGammaSettings.cs",
+            "Stalker.Gamma/Utilities/DirUtils.cs",
+            "Stalker.Gamma/ModOrganizer/WriteModOrganizerIni.cs",
+            "stalker-gamma-cli/Services/SetupUtilitiesService.cs",
+            "stalker-gamma-cli/Commands/Anomaly.cs",
+            "stalker-gamma-cli/Utilities/UtilitiesReady.cs",
+            "stalker-gamma-cli/Utilities/FileExplorerHelper.cs",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIsNone(
+                    re.search(
+                        r"OperatingSystem\.IsWindows|OSPlatform\.(Windows|OSX)"
+                        r"|7zz\.exe|unzip\.exe|tar\.exe",
+                        source(path),
+                    ),
+                    f"{path}: non-Linux adapter branch remains",
+                )
+
+    def test_zip_uses_unzip_and_wine_payload_is_preserved(self):
+        archive = source("Stalker.Gamma/Services/ArchiveService.cs")
+        self.assertFalse("tarService" in archive, "ZIP still has the macOS tar adapter")
+        self.assertIn("unzipService.ExtractAsync(", archive)
+        self.assertIn("DirUtils.NormalizePermissions(destinationDir);", archive)
+        ini = source("Stalker.Gamma/ModOrganizer/WriteModOrganizerIni.cs")
+        self.assertIn('drivePrefix = "Z:"', ini)
+        for payload in (
+            "AnomalyLauncher.exe",
+            "AnomalyDX11AVX.exe",
+            "AnomalyDX9.exe",
+            "Explorer++.exe",
+        ):
+            self.assertIn(payload, ini)
+        self.assertIn(
+            "ModOrganizer.exe",
+            source(
+                "Stalker.Gamma/ModOrganizer/DownloadModOrganizer/"
+                "DownloadModOrganizerService.cs"
+            ),
+        )
+
+    def test_desktop_opener_passes_one_linux_path_argument(self):
+        text = source("stalker-gamma-cli/Utilities/FileExplorerHelper.cs")
+        self.assertTrue('FileName = "xdg-open"' in text, "Linux opener missing")
+        self.assertIn("UseShellExecute = false", text)
+        self.assertIn("ArgumentList.Add(Path.GetFullPath(path))", text)

@@ -16,18 +16,15 @@ public static class DirUtils
         {
             // 1. Normalize the directory itself
             di.Attributes &= ~FileAttributes.ReadOnly;
-            if (!OperatingSystem.IsWindows())
-            {
-                di.UnixFileMode =
-                    UnixFileMode.UserRead
-                    | UnixFileMode.UserWrite
-                    | UnixFileMode.UserExecute
-                    | UnixFileMode.GroupRead
-                    | UnixFileMode.GroupExecute
-                    | UnixFileMode.GroupWrite
-                    | UnixFileMode.OtherRead
-                    | UnixFileMode.OtherExecute;
-            }
+            di.UnixFileMode =
+                UnixFileMode.UserRead
+                | UnixFileMode.UserWrite
+                | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead
+                | UnixFileMode.GroupExecute
+                | UnixFileMode.GroupWrite
+                | UnixFileMode.OtherRead
+                | UnixFileMode.OtherExecute;
 
             // 2. Normalize all files in this directory
             foreach (var fi in di.GetFiles())
