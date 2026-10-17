@@ -15,11 +15,7 @@ internal static partial class LibCurl
             {
                 if (name != Lib)
                     return IntPtr.Zero;
-                var fileName =
-                    RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "libcurl-impersonate.dll"
-                    : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "libcurl-impersonate.dylib"
-                    : "libcurl-impersonate.so";
-                return NativeLibrary.Load(fileName, assembly, searchPath);
+                return NativeLibrary.Load("libcurl-impersonate.so", assembly, searchPath);
             }
         );
     }
@@ -55,10 +51,6 @@ internal static partial class LibCurl
         string target,
         int defaultHeaders
     );
-
-    private static readonly bool _isMacOsArm64 =
-        RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-        && RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
 
     // curl_easy_setopt is variadic in C. On both x64 (R8) and ARM64/AAPCS64 (x2),
     // the 3rd argument is passed in the first available register — no stack padding needed.
@@ -98,125 +90,23 @@ internal static partial class LibCurl
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial int getinfo_long_impl(IntPtr h, int info, out long value);
 
-    // ARM64 calling convention fix: fill x2-x7 with dummy zeros so the real value
-    // lands on the stack at [old_sp], which is where Curl_vsetopt reads it from.
-    [LibraryImport(
-        Lib,
-        EntryPoint = "curl_easy_setopt",
-        StringMarshalling = StringMarshalling.Utf8
-    )]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static partial int setopt_str_macos_arm64_impl(
-        IntPtr h,
-        int opt,
-        nint _2,
-        nint _3,
-        nint _4,
-        nint _5,
-        nint _6,
-        nint _7,
-        string value
-    );
-
-    [LibraryImport(Lib, EntryPoint = "curl_easy_setopt")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static partial int setopt_long_macos_arm64_impl(
-        IntPtr h,
-        int opt,
-        nint _2,
-        nint _3,
-        nint _4,
-        nint _5,
-        nint _6,
-        nint _7,
-        long value
-    );
-
-    [LibraryImport(Lib, EntryPoint = "curl_easy_setopt")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static partial int setopt_ptr_macos_arm64_impl(
-        IntPtr h,
-        int opt,
-        nint _2,
-        nint _3,
-        nint _4,
-        nint _5,
-        nint _6,
-        nint _7,
-        IntPtr value
-    );
-
-    [LibraryImport(Lib, EntryPoint = "curl_easy_setopt")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static partial int setopt_cb_macos_arm64_impl(
-        IntPtr h,
-        int opt,
-        nint _2,
-        nint _3,
-        nint _4,
-        nint _5,
-        nint _6,
-        nint _7,
-        [MarshalAs(UnmanagedType.FunctionPtr)] WriteCallback value
-    );
-
-    [LibraryImport(Lib, EntryPoint = "curl_easy_setopt")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static partial int setopt_xcb_macos_arm64_impl(
-        IntPtr h,
-        int opt,
-        nint _2,
-        nint _3,
-        nint _4,
-        nint _5,
-        nint _6,
-        nint _7,
-        [MarshalAs(UnmanagedType.FunctionPtr)] XferInfoCallback value
-    );
-
-    [LibraryImport(Lib, EntryPoint = "curl_easy_getinfo")]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static partial int getinfo_long_macos_arm64_impl(
-        IntPtr h,
-        int info,
-        nint _2,
-        nint _3,
-        nint _4,
-        nint _5,
-        nint _6,
-        nint _7,
-        out long value
-    );
-
     internal static int curl_easy_getinfo_long(IntPtr h, int info, out long value) =>
-        _isMacOsArm64
-            ? getinfo_long_macos_arm64_impl(h, info, 0, 0, 0, 0, 0, 0, out value)
-            : getinfo_long_impl(h, info, out value);
+        getinfo_long_impl(h, info, out value);
 
     internal static int curl_easy_setopt_str(IntPtr h, int opt, string v) =>
-        _isMacOsArm64
-            ? setopt_str_macos_arm64_impl(h, opt, 0, 0, 0, 0, 0, 0, v)
-            : setopt_str_impl(h, opt, v);
+        setopt_str_impl(h, opt, v);
 
     internal static int curl_easy_setopt_long(IntPtr h, int opt, long v) =>
-        _isMacOsArm64
-            ? setopt_long_macos_arm64_impl(h, opt, 0, 0, 0, 0, 0, 0, v)
-            : setopt_long_impl(h, opt, v);
+        setopt_long_impl(h, opt, v);
 
     internal static int curl_easy_setopt_ptr(IntPtr h, int opt, IntPtr v) =>
-        _isMacOsArm64
-            ? setopt_ptr_macos_arm64_impl(h, opt, 0, 0, 0, 0, 0, 0, v)
-            : setopt_ptr_impl(h, opt, v);
+        setopt_ptr_impl(h, opt, v);
 
     internal static int curl_easy_setopt_cb(IntPtr h, int opt, WriteCallback v) =>
-        _isMacOsArm64
-            ? setopt_cb_macos_arm64_impl(h, opt, 0, 0, 0, 0, 0, 0, v)
-            : setopt_cb_impl(h, opt, v);
+        setopt_cb_impl(h, opt, v);
 
     internal static int curl_easy_setopt_xcb(IntPtr h, int opt, XferInfoCallback v) =>
-        _isMacOsArm64
-            ? setopt_xcb_macos_arm64_impl(h, opt, 0, 0, 0, 0, 0, 0, v)
-            : setopt_xcb_impl(h, opt, v);
+        setopt_xcb_impl(h, opt, v);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate nuint WriteCallback(IntPtr data, nuint size, nuint nmemb, IntPtr userdata);

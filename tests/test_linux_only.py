@@ -149,3 +149,48 @@ class LinuxRuntimeTests(unittest.TestCase):
         self.assertTrue('FileName = "xdg-open"' in text, "Linux opener missing")
         self.assertIn("UseShellExecute = false", text)
         self.assertIn("ArgumentList.Add(Path.GetFullPath(path))", text)
+
+
+class LinuxCurlTests(unittest.TestCase):
+    def test_resolver_and_wrappers_are_linux_only(self):
+        text = source("LibCurlImpersonate/LibCurl.cs")
+        self.assertTrue(
+            'NativeLibrary.Load("libcurl-impersonate.so", assembly, searchPath)' in text,
+            "Native resolver is not Linux-only",
+        )
+        for forbidden in (
+            "OSPlatform.Windows",
+            "OSPlatform.OSX",
+            "_isMacOsArm64",
+            "macos_arm64_impl",
+            ".dylib",
+            "libcurl-impersonate.dll",
+        ):
+            with self.subTest(symbol=forbidden):
+                self.assertFalse(forbidden in text, f"Non-Linux curl binding: {forbidden}")
+        for name in (
+            "getinfo_long",
+            "setopt_str",
+            "setopt_long",
+            "setopt_ptr",
+            "setopt_cb",
+            "setopt_xcb",
+        ):
+            with self.subTest(wrapper=name):
+                self.assertIsNotNone(
+                    re.search(rf"=>\s*{name}_impl\(", text),
+                    f"{name}: direct Linux wrapper missing",
+                )
+        self.assertIn("typeof(CallConvCdecl)", text)
+        self.assertIn("out long value", text)
+
+    def test_application_has_no_non_linux_host_selection(self):
+        for path in application_sources():
+            with self.subTest(path=str(path.relative_to(ROOT))):
+                self.assertIsNone(
+                    re.search(
+                        r"OperatingSystem\.IsWindows|OSPlatform\.(Windows|OSX)",
+                        path.read_text(encoding="utf-8"),
+                    ),
+                    f"{path.relative_to(ROOT)}: non-Linux host selection remains",
+                )
