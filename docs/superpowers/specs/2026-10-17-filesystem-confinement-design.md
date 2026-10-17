@@ -12,21 +12,26 @@ The user approved the functional design after selecting:
 - **No automatic repair:** an unexpected link or mismatched downloads directory
   stops the operation; do not replace, delete or migrate it automatically.
 
-This document specifies proposed behavior, not implemented or runtime-verified
-protection. After the design summary, the user's subsequent **“adelante”**
-authorized implementation planning. Production code and regression sources remain
-unchanged; implementation-plan approval is a separate gate.
+This document specifies intended behavior, not implemented or runtime-verified
+protection. After the original planning checkpoint, the user requested parallel
+implementation with subagents, preceded by architecture analysis. The subsequent
+**“adelante”** approves the presented architecture and the explicit GAMMA/cache
+layout restriction below. Continue with the revised first implementation batch;
+stop at its review gate. This does not authorize .NET or application execution.
 
 ## Scope and execution constraints
 
 Keep C#, the CLI's NativeAOT configuration, the non-AOT companion server, Linux
 x64/arm64, Wine payload names/INI paths, and the online/offline/update/resume
-flows. Continue inline on `linux-hardening` in its existing worktree.
+flows. Continue on `linux-hardening` in its existing worktree. Parallel agents
+must have disjoint file ownership and stable dependency contracts; shared-file
+integration and git commits belong to the coordinator.
 
-Preparing this design permits local documentation and a local design commit.
-It does not authorize implementation, downloads, new dependencies, a local .NET
-SDK/compiler/build/restore/test command, remote workflow execution, installer or
-container execution, push, merge, publication or upstream disclosure. Any later
+The current implementation request permits scoped source/test/documentation
+edits and local commits in the revised first batch. It does not authorize
+downloads, new dependencies, a local .NET SDK/compiler/build/restore/test command,
+remote workflow execution, installer or container execution, push, merge,
+publication or upstream disclosure. Any later
 remote build/download still needs the previously required scoped consent and
 build-input verification. Private audit evidence stays ignored.
 
@@ -69,8 +74,11 @@ call site:
 Keep policy in the shared application library so installer and CLI paths use
 the same rules. Validate at public mutation boundaries as well as factories;
 constructing records directly or receiving metadata later must not bypass the
-policy. The implementation plan will choose concrete names/signatures consistent
-with the surrounding code; this design does not prescribe a native ABI.
+policy. Use owned instruction values, immutable entry descriptions and narrow
+operation-specific preparation results rather than mutable arrays or checked
+`FileSystemInfo` objects as trust tokens. Preserve intended root ownership through
+execution and validate proposed output conflicts, not just existing trees. This
+design does not prescribe a native ABI or a general transaction framework.
 
 ## Input contracts
 
@@ -95,6 +103,14 @@ with the surrounding code; this design does not prescribe a native ABI.
 
 ### Instruction paths
 
+- Keep blank-field versus explicit-no-op meaning independently of executable path
+  count; separator selection must not turn an explicit `0` or JSON `[]` into a
+  blank field. Own a defensive copy of parsed paths and expose no mutable backing
+  array. Empty wire markers are encoding, not executable paths. Instruction-value
+  equality compares blankness and ordered canonical paths; unrelated diff identity
+  and author/hash comparisons remain unchanged.
+- A parsed literal singleton folder `0` must survive JSON write/read; encode it
+  unambiguously, for example as `["0", ""]`. Raw singleton `["0"]` remains a no-op.
 - Preserve the current no-op meanings of absent/blank instructions and `0`.
 - Support relative nested components separated by `/` or ordinary `\`; retain
   the existing TSV list delimiter `:` and JSON array wire shape.
@@ -140,6 +156,12 @@ prefix with a child of an authorized root; Linux comparisons are case-sensitive.
 
 ## Filesystem and alias rules
 
+GAMMA and cache trees must be disjoint, except that the real cache may be exactly
+`GAMMA/downloads`. Reject all other equal/nested GAMMA/cache layouts before any
+creation or mutation. Do not repair or migrate their contents. This additional
+configuration restriction was presented explicitly and approved by the user's
+latest **“adelante”**; it is not an already-implemented check.
+
 For each managed operation, perform input validation and a preflight of the
 affected source/destination paths and selected traversal trees before its first
 mutation. Check existing final file entries as well as directories and parents,
@@ -160,6 +182,9 @@ The one exception is the exact `<GAMMA>/downloads` entry:
   link's parent when necessary, equals that configured cache path. The cache
   root itself must pass the strict checks; a link chain is not accepted merely
   because its eventual destination would match.
+- Inspect the raw target's path-walk prerequisites before lexical equality;
+  normalization must not hide a missing, file-valued or linked component removed
+  by `..`. Alias-target syntax is distinct from untrusted instruction syntax.
 - A dangling, cyclic, file-valued or wrong-target entry fails without removal or
   replacement. Existing mismatches are not migration opportunities.
 - If the entry is absent, create missing authorized real directories first and
@@ -205,6 +230,13 @@ failed record complete, or invoke destructive cleanup as recovery. Check cleanup
 and `finally` paths too. Existing permission-mode choices are not broadened or
 declared secure by this stage; only their traversal boundary is addressed.
 
+Recognize unsafe stops and cancellation separately through ordinary wrappers and
+all aggregate members. Check cancellation after callbacks/awaited work and before
+follow-up/status publication. Resource-disposal `finally` blocks remain valid;
+destructive failure recovery does not. Unresolved archive metadata is valid for
+display/completed resume, but must fail before archive-path I/O. Keep one retained
+cache owner for alias-aware consumers, including update checks and MO2 deletion.
+
 ## Planned regression strategy
 
 Prepare tests against production C# policy and operations using synthetic trees
@@ -246,6 +278,7 @@ passes is allowed before separately authorized remote compilation/execution.
 4. Obtain separate authorization and verified build inputs before any remote
    execution; report runtime results only from actual evidence.
 
-The planning gate is cleared; implementation-plan approval remains pending. No
-stage of this handoff authorizes installing or running the application for
-personal use.
+The architecture/configuration decision is approved. Execute only the revised
+first batch in `docs/superpowers/plans/2026-10-18-filesystem-foundations.md`, then
+stop for review; reconcile later tasks before executing them. No stage of this
+handoff authorizes installing or running the application for personal use.

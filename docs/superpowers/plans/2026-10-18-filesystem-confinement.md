@@ -1,6 +1,6 @@
 # Batch 4A Filesystem Boundaries Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task, inline without subagents. Steps use checkbox (`- [ ]`) syntax for tracking. The user has already selected sequential inline batches; do not dispatch agents or create another worktree.
+> **Historical implementation proposal:** its fixed interfaces and inline/no-agent instructions are superseded by the approved architecture review. Use `docs/superpowers/plans/2026-10-18-filesystem-foundations.md` for the first batch with `subagent-driven-development`; preserve the existing worktree. Tasks 4–10 below are an inventory, not executable instructions, until reconciled with the new owned-input/typed-inspection/cache/stop contracts and reviewed at the next gate.
 
 **Goal:** Enforce the approved input and existing-filesystem link policies at managed installation, profile and cache operations without claiming a race-resistant or extractor sandbox.
 
@@ -15,7 +15,7 @@ The normative specification is
 The following requirements are copied from that specification:
 
 - Keep C#, the CLI's NativeAOT configuration, the non-AOT companion server, Linux x64/arm64, Wine payload names/INI paths, and the online/offline/update/resume flows.
-- Continue inline on `linux-hardening` in its existing worktree.
+- Continue on `linux-hardening` in its existing worktree; the user's newer parallel-agent instruction supersedes inline-only execution.
 - Private audit evidence stays ignored.
 - Required names must not be null, empty or whitespace-only. Reject `.` and `..`, `/` and `\` separators, control characters and rooted/drive/UNC forms.
 - Preserve ordinary spaces, Unicode, apostrophes, extensions and ordinary dots inside valid names. Do not use an ASCII-only name allowlist.
@@ -33,11 +33,11 @@ The following requirements are copied from that specification:
 
 Additional execution gates carried forward from the approved work:
 
-- This document is a proposal awaiting implementation approval. Writing it does not execute any task below.
+- This document is historical planning evidence. The approved revised first batch is in `2026-10-18-filesystem-foundations.md`; do not execute stale signatures below.
 - No artifact/dependency downloads or installations, local SDK/compiler/build/restore/test commands, workflow dispatch, installers, containers, push, merge, publication or upstream disclosure.
 - Any remote build or acquisition of artifacts requires separate scoped consent and verified build inputs. Do not edit/dispatch CI to bypass this gate.
 - Concurrent replacement, extractor writes, hard links, mounts, content authenticity, atomic downloads, restrictive-mode policy, subprocess/server policy and supply-chain pinning remain separate stages.
-- Keep application/test source changes out of this documentation checkpoint. Do not stage ignored `docs/security/` evidence or build outputs.
+- The earlier documentation checkpoint did not include application/test changes. The revised first batch now permits them; ignored `docs/security/` evidence and build outputs remain excluded.
 
 ---
 
