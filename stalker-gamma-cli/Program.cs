@@ -16,6 +16,13 @@ public static class Program
 {
     public static async Task Main(string[] args)
     {
+        if (!OperatingSystem.IsLinux())
+        {
+            Console.Error.WriteLine("This fork supports Linux only.");
+            Environment.ExitCode = 1;
+            return;
+        }
+
         var stalkerGammaLogsPath = Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "stalker-gamma",

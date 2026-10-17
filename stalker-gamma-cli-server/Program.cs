@@ -6,8 +6,15 @@ using Microsoft.Playwright;
 using Scalar.AspNetCore;
 using stalker_gamma_cli_server;
 
+if (!OperatingSystem.IsLinux())
+{
+    Console.Error.WriteLine("This fork supports Linux only.");
+    Environment.ExitCode = 1;
+    return;
+}
+
 // Load appsettings.json from next to the executable rather than the working directory, so the
-// server works when launched from anywhere (e.g. the Homebrew cask's symlink on PATH).
+// content root does not depend on the directory from which the server is launched.
 var builder = WebApplication.CreateBuilder(
     new WebApplicationOptions { Args = args, ContentRootPath = AppContext.BaseDirectory }
 );
