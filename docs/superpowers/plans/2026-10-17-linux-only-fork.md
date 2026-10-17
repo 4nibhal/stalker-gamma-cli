@@ -56,7 +56,7 @@ Before staging each task, inspect `git status --short` and the diff. Stage only 
 - [x] User selected inline execution in batches, without subagents.
 - [x] Batch 1: Tasks 1-2; local checks recorded below, paused for user review.
 - [x] Batch 2: Tasks 3-4; local checks recorded below, paused for user review.
-- [ ] Batch 3: Tasks 5-6 (in progress: Task 6 verified, documentation commit pending).
+- [x] Batch 3: Tasks 5-6; source conversion and local checks complete, remote build/runtime verification still gated.
 
 The existing `linux-hardening` linked worktree was verified clean before source
 edits. No dependency setup or local .NET command is authorized or required for
@@ -1017,7 +1017,7 @@ its early Linux guard/comment, the companion server is unchanged; browser
 fingerprint, network policy and unrelated generated clients were not rewritten.
 No independent subagent review was performed, per the user's inline selection.
 
-- [ ] **Step 5: Record an evidence-based handoff and commit documentation.**
+- [x] **Step 5: Record an evidence-based handoff and commit documentation.**
 
 Mark only observed local checks as passing. Leave these explicitly **not run**: .NET compilation, remote C# regression, native curl/ABI tests, workflow execution, actual installer/game/server operation, and verification of downloaded tools/mods. Do not call the application ready for personal installation. List the next security stage without publishing the private audit or exploit details.
 
@@ -1025,6 +1025,17 @@ Mark only observed local checks as passing. Leave these explicitly **not run**: 
 git add -- README.md build/linux/README.md build/update-pkgbuild.sh tests/test_linux_only.py docs/superpowers/specs/2026-10-17-linux-only-fork-design.md docs/superpowers/plans/2026-10-17-linux-only-fork.md
 git commit -m "docs: explain Linux fork usage and remote-only build limits"
 ```
+
+Local documentation commit: `669b410`; build/workflow commit: `2f35473`.
+The full local Python discovery run (`python3 -m unittest discover -s tests -v`)
+also passes all 16 tests. Task 6 staging reported the same ignored-`build`
+warning noted in Task 5; the index was verified to contain exactly the 6
+approved documentation/test files before committing, without forcing artifacts
+or changing ignore rules. All six tasks are complete within the source-only
+scope; the unrun build/runtime checks below remain explicit blockers to use
+or integration. Branch `linux-hardening` and the worktree at
+`/home/4nibhal/Desarrollo/games/stalker-gamma-cli/.worktrees/linux-hardening`
+are preserved. No merge/push/cleanup is authorized by completing this plan.
 
 ## Verification Handoff
 
