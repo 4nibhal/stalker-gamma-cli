@@ -7,6 +7,9 @@
 - Remove Windows installer support rather than maintaining cross-platform
   compatibility. macOS host support is also outside this Linux-only fork.
 - Work on branch `linux-hardening` in `.worktrees/linux-hardening`.
+- Retain C# and NativeAOT. Compile the native Linux executable in GitHub Actions;
+  do not install or run a C# compiler, .NET SDK, or local .NET build toolchain on
+  the user's machine. This restriction does not require rewriting the project.
 - Continue the security review and hardening; platform removal is not a claim
   that the remaining program or downloaded content is safe.
 
@@ -67,6 +70,9 @@ conversion.
 - CI is Linux-only, with explicit read-only repository permissions for build
   jobs, no publisher secrets, and no release/package publication jobs. Changes to
   workflow files do not authorize triggering downloads or publishing this branch.
+- CI is manually dispatched so committing or pushing a branch does not silently
+  start SDK/package/tool downloads. Native compilation belongs on the remote
+  Linux runners, not on the user's machine.
 - Correct Linux publish RID selection and keep tool-download integrity gaps
   documented until the supply-chain stage; do not invent hashes.
 - README identifies this personal Linux-only fork, retains attribution/license,
@@ -81,10 +87,14 @@ conversion.
   non-publishing CI.
 - Inspect parsing of changed C# with the installed parser and run available
   shell/static checks. These are not substitutes for compiling C#.
-- `dotnet --info` currently exits 127: the SDK is unavailable. No SDK, NuGet
-  package, native library, browser image or other artifact may be downloaded
-  without separate explicit scoped consent. Record the .NET build/runtime tests
-  as blocked rather than passing.
+- The user explicitly selected compilation in GitHub Actions, with no local C#
+  compiler or SDK. Do not install a toolchain or try local .NET build/restore/test
+  commands. Local checks use existing parsers and standard-library Python tests.
+- A successful remote .NET build and runtime regression tests must be recorded
+  from an actual CI run before reporting them as passing. Until then, mark them
+  as not run. No SDK, NuGet package, native library, browser image or other
+  artifact may be downloaded, locally or by a triggered CI run, without separate
+  explicit scoped consent.
 - Do not execute the installer, game, build-download targets or companion server
   as an improvised test. No actual personal installation is part of this stage.
 
@@ -107,7 +117,8 @@ security requirements remain applicable to the later stages.
 - [x] Create and verify the personal GitHub fork.
 - [x] Create an ignored isolated worktree and configure origin/upstream.
 - [x] Record Linux-only design and explicit runtime-verification limits.
-- [ ] User review of this written specification.
+- [x] User review of the initial written specification.
+- [ ] User review of the remote-compilation/no-local-compiler clarification.
 - [ ] Write implementation plan.
 - [ ] Add and run failing source-invariant tests.
 - [ ] Remove non-Linux host support and fork-unsafe publishing.
