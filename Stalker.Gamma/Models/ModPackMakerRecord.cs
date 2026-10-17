@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using Stalker.Gamma.Filesystem;
 
 namespace Stalker.Gamma.Models;
 
@@ -10,7 +11,7 @@ public class ModPackMakerRecord : IEquatable<ModPackMakerRecord>
     public required string DlLink { get; set; }
 
     [JsonConverter(typeof(ModPackMakerInstructionConverter))]
-    public string? Instructions { get; set; }
+    public InstructionSet Instructions { get; set; } = InstructionSet.Blank;
 
     [JsonConverter(typeof(ModPackMakerPatchConverter))]
     public string? Patch { get; set; }
@@ -26,7 +27,7 @@ public class ModPackMakerRecord : IEquatable<ModPackMakerRecord>
         if (ReferenceEquals(this, other))
             return true;
         return DlLink == other.DlLink
-            && Instructions == other.Instructions
+            && Instructions.Equals(other.Instructions)
             && Patch == other.Patch
             && AddonName == other.AddonName
             && ModDbUrl == other.ModDbUrl
@@ -67,52 +68,58 @@ public class ModPackMakerRecord : IEquatable<ModPackMakerRecord>
 )]
 public partial class ModPackMakerCtx : JsonSerializerContext;
 
-public class ModPackMakerInstructionConverter : JsonConverter<string>
+public class ModPackMakerInstructionConverter : JsonConverter<InstructionSet>
 {
-    public override string? Read(
+    public override bool HandleNull => true;
+
+    public override InstructionSet Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
     )
     {
-        if (reader.TokenType != JsonTokenType.StartArray)
+        try
         {
-            throw new JsonException("Expected StartArray token.");
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return InstructionSet.FromJsonTokens(null);
+            }
+            if (reader.TokenType != JsonTokenType.StartArray)
+            {
+                throw new UnsafePathException("Invalid instruction token.");
+            }
+
+            List<string?> tokens = [];
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                {
+                    return InstructionSet.FromJsonTokens(tokens);
+                }
+                if (reader.TokenType != JsonTokenType.String)
+                {
+                    throw new UnsafePathException("Invalid instruction token.");
+                }
+                tokens.Add(reader.GetString());
+            }
+            throw new UnsafePathException("Invalid instruction token.");
         }
-
-        List<string> instructions = [];
-
-        while (reader.Read())
+        catch (UnsafePathException error)
         {
-            if (reader.TokenType == JsonTokenType.EndArray)
-            {
-                return instructions.Count != 0 ? string.Join(':', instructions) : "0";
-            }
-
-            if (reader.TokenType == JsonTokenType.String)
-            {
-                instructions.Add(reader.GetString() ?? throw new JsonException("Expected string"));
-            }
-            else
-            {
-                throw new JsonException("Expected string token.");
-            }
+            throw new JsonException("Invalid instruction.", error);
         }
-        throw new JsonException("Error reading instructions.");
+        catch (JsonException)
+        {
+            throw new JsonException("Invalid instruction.", new UnsafePathException("Invalid instruction token."));
+        }
     }
 
-    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, InstructionSet value, JsonSerializerOptions options)
     {
         writer.WriteStartArray();
-        if (value == "0")
+        foreach (var token in (value ?? InstructionSet.Blank).ToJsonTokens())
         {
-            writer.WriteEndArray();
-            return;
-        }
-        var split = value.Split(':');
-        foreach (var s in split)
-        {
-            writer.WriteStringValue(s);
+            writer.WriteStringValue(token);
         }
         writer.WriteEndArray();
     }
@@ -120,17 +127,42 @@ public class ModPackMakerInstructionConverter : JsonConverter<string>
 
 public class ModPackMakerPatchConverter : JsonConverter<string>
 {
+    public override bool HandleNull => true;
+
     public override string? Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
     )
     {
-        return $"- {reader.GetString()}" ?? throw new JsonException("Expected string");
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+        if (reader.TokenType != JsonTokenType.String)
+        {
+            throw new JsonException("Invalid patch.", new UnsafePathException("Invalid patch token."));
+        }
+        var value = reader.GetString();
+        try
+        {
+            // Validate the raw author before adding the display prefix; preserve its spelling.
+            InputPolicy.OptionalComponent(value, "patch");
+            return string.IsNullOrWhiteSpace(value) ? value : $"- {value}";
+        }
+        catch (UnsafePathException error)
+        {
+            throw new JsonException("Invalid patch.", error);
+        }
     }
 
     public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
     {
-        writer.WriteStringValue(value.TrimStart("- "));
+        if (value is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+        writer.WriteStringValue(value.StartsWith("- ", StringComparison.Ordinal) ? value[2..] : value);
     }
 }

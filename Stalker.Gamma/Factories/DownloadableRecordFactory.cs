@@ -1,3 +1,4 @@
+using Stalker.Gamma.Filesystem;
 using Stalker.Gamma.GammaInstallerServices;
 using Stalker.Gamma.GammaInstallerServices.SpecialRepos;
 using Stalker.Gamma.ModDb.Models;
@@ -144,149 +145,57 @@ public class DownloadableRecordFactory(
     )
     {
         downloadableRecord = null;
-
-        if (TryParseModDbRecord(gammaDir, record, out var modDbRecord))
+        var prepared = RecordPathPolicy.Prepare(record);
+        switch (prepared.Role)
         {
-            downloadableRecord = modDbRecord;
-            return true;
-        }
-
-        if (TryParseModDbGetMetadataRecord(gammaDir, record, out var modDbGetMetadataRecord))
-        {
-            downloadableRecord = modDbGetMetadataRecord;
-            return true;
-        }
-
-        if (TryParseGithubRecord(gammaDir, record, out var githubRecord))
-        {
-            downloadableRecord = githubRecord;
-            return true;
-        }
-
-        return false;
-    }
-
-    private bool TryParseModDbGetMetadataRecord(
-        string gammaDir,
-        ModPackMakerRecord record,
-        out ModDbRecordGetMetadata? downloadableRecord
-    )
-    {
-        downloadableRecord = null;
-        if (
-            !string.IsNullOrWhiteSpace(record.AddonName)
-            && string.IsNullOrWhiteSpace(record.ZipName)
-            && !string.IsNullOrWhiteSpace(record.DlLink)
-            && record.DlLink.Contains("moddb")
-        )
-        {
-            var outputDirName = $"{record.Counter}- {record.AddonName} {record.Patch}";
-            var instructions = ProcessInstructions(record.Instructions);
-            downloadableRecord = new ModDbRecordGetMetadata(
-                record.AddonName!,
-                record.DlLink,
-                instructions,
-                outputDirName,
-                gammaDir,
-                archiveService,
-                gammaProgress,
-                modDbService,
-                getCanonicalLinkFromModDbStartLink,
-                modDbGetAddonMetadataService
-            );
-            return true;
-        }
-        return false;
-    }
-
-    private bool TryParseGithubRecord(
-        string gammaDir,
-        ModPackMakerRecord record,
-        out GithubRecord? downloadableRecord
-    )
-    {
-        downloadableRecord = null;
-
-        if (record.DlLink.Contains("github"))
-        {
-            if (
-                string.IsNullOrWhiteSpace(record.AddonName)
-                || string.IsNullOrWhiteSpace(record.Patch)
-            )
-            {
-                throw new DownloadableRecordFactoryException($"Invalid record: {record}");
-            }
-
-            var instructions = ProcessInstructions(record.Instructions);
-
-            var archiveName = $"{record.DlLink.Split('/')[4]}.zip";
-            var outputDirName = $"{record.Counter}- {record.AddonName} {record.Patch}";
-            downloadableRecord = new GithubRecord(
-                gammaProgress,
-                record.AddonName,
-                record.DlLink,
-                record.ModDbUrl ?? record.DlLink,
-                archiveName,
-                record.Md5ModDb,
-                gammaDir,
-                outputDirName,
-                instructions,
-                httpClientFactory,
-                archiveService
-            );
-            return true;
-        }
-
-        return false;
-    }
-
-    private bool TryParseModDbRecord(
-        string gammaDir,
-        ModPackMakerRecord record,
-        out ModDbRecord? downloadableRecord
-    )
-    {
-        downloadableRecord = null;
-        if (record.DlLink.Contains("moddb"))
-        {
-            if (
-                string.IsNullOrWhiteSpace(record.AddonName)
-                || string.IsNullOrWhiteSpace(record.Patch)
-                || string.IsNullOrWhiteSpace(record.ZipName)
-            )
-            {
-                // likely using the mod pack maker list from stalker_gamma repo with no moddb metadata
+            case RecordRole.StandardModDb:
+                downloadableRecord = new ModDbRecord(
+                    gammaProgress,
+                    record.AddonName!,
+                    record.DlLink,
+                    record.ModDbUrl ?? record.DlLink,
+                    prepared.ArchiveName!,
+                    record.Md5ModDb,
+                    gammaDir,
+                    prepared.OutputDirectoryName!,
+                    prepared.Instructions.Paths.ToList(),
+                    archiveService,
+                    modDbService
+                );
+                return true;
+            case RecordRole.MetadataOnlyModDb:
+                downloadableRecord = new ModDbRecordGetMetadata(
+                    record.AddonName!,
+                    record.DlLink,
+                    prepared.Instructions.Paths.ToList(),
+                    prepared.OutputDirectoryName!,
+                    gammaDir,
+                    archiveService,
+                    gammaProgress,
+                    modDbService,
+                    getCanonicalLinkFromModDbStartLink,
+                    modDbGetAddonMetadataService
+                );
+                return true;
+            case RecordRole.Github:
+                downloadableRecord = new GithubRecord(
+                    gammaProgress,
+                    record.AddonName!,
+                    record.DlLink,
+                    record.ModDbUrl ?? record.DlLink,
+                    prepared.ArchiveName!,
+                    record.Md5ModDb,
+                    gammaDir,
+                    prepared.OutputDirectoryName!,
+                    prepared.Instructions.Paths.ToList(),
+                    httpClientFactory,
+                    archiveService
+                );
+                return true;
+            default:
                 return false;
-            }
-
-            // normal mod pack maker with moddb metadata
-            var outputDirName = $"{record.Counter}- {record.AddonName} {record.Patch}";
-            var instructions = ProcessInstructions(record.Instructions);
-            downloadableRecord = new ModDbRecord(
-                gammaProgress,
-                record.AddonName,
-                record.DlLink,
-                record.ModDbUrl ?? record.DlLink,
-                record.ZipName,
-                record.Md5ModDb,
-                gammaDir,
-                outputDirName,
-                instructions,
-                archiveService,
-                modDbService
-            );
-            return true;
         }
-        return false;
     }
-
-    private static List<string> ProcessInstructions(string? instructions) =>
-        string.IsNullOrWhiteSpace(instructions) || instructions == "0"
-            ? []
-            : instructions
-                .Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(y => y.TrimStart('\\').Replace('\\', Path.DirectorySeparatorChar))
-                .ToList();
 }
 
 public class DownloadableRecordFactoryException(string msg) : Exception(msg);

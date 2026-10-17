@@ -29,7 +29,7 @@ public static partial class DiffModPackMakerLists
                     old.Md5ModDb,
                     StringComparison.OrdinalIgnoreCase
                 )
-                || matchingNewRec.Instructions != old.Instructions
+                || !matchingNewRec.Instructions.Equals(old.Instructions)
                 || PatchRx().Match(matchingNewRec.Patch ?? "").Groups["author"].Value
                     != PatchRx().Match(old.Patch ?? "").Groups["author"].Value
             )
@@ -86,7 +86,7 @@ public static partial class DiffModPackMakerLists
                     old.Md5ModDb,
                     StringComparison.OrdinalIgnoreCase
                 )
-                || matchingNewRec.Instructions != old.Instructions
+                || !matchingNewRec.Instructions.Equals(old.Instructions)
                 || PatchRx().Match(matchingNewRec.Patch ?? "").Groups["author"].Value
                     != PatchRx().Match(old.Patch ?? "").Groups["author"].Value
             )

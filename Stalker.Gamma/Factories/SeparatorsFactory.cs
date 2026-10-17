@@ -1,3 +1,4 @@
+using Stalker.Gamma.Filesystem;
 using Stalker.Gamma.Models;
 
 namespace Stalker.Gamma.Factories;
@@ -9,22 +10,22 @@ public interface ISeparatorsFactory
 
 public class SeparatorsFactory : ISeparatorsFactory
 {
-    public List<ISeparator> Create(IList<ModPackMakerRecord> records) =>
-        records
-            .Select((r, idx) => new { r, idx })
-            .Where(r =>
-                string.IsNullOrWhiteSpace(r.r.AddonName)
-                && string.IsNullOrWhiteSpace(r.r.Instructions)
-                && string.IsNullOrWhiteSpace(r.r.Md5ModDb)
-                && string.IsNullOrWhiteSpace(r.r.ZipName)
-                && string.IsNullOrWhiteSpace(r.r.ModDbUrl)
-                && string.IsNullOrWhiteSpace(r.r.Patch)
-            )
-            .Select(r => new Separator
+    public List<ISeparator> Create(IList<ModPackMakerRecord> records)
+    {
+        var snapshot = records.ToArray();
+        var prepared = RecordPathPolicy.ValidateAll(snapshot);
+        return snapshot
+            .Select((record, index) => (record, index))
+            .Where(item => prepared[item.index].Role == RecordRole.Separator)
+            .Select(item =>
             {
-                Name = $"{r.r.DlLink} Separator",
-                FolderName = $"{r.idx + 1}- {r.r.DlLink}_separator",
+                var (record, index) = item;
+                return (ISeparator)new Separator
+                {
+                    Name = $"{record.DlLink} Separator",
+                    FolderName = prepared[index].OutputDirectoryName!,
+                };
             })
-            .Cast<ISeparator>()
             .ToList();
+    }
 }
