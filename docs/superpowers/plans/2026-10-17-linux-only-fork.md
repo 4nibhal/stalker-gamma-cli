@@ -51,6 +51,19 @@
 
 Before staging each task, inspect `git status --short` and the diff. Stage only the listed files; preserve any unrelated user work. Tasks are sequential because the final source contracts cover earlier changes.
 
+## Execution Checkpoints
+
+- [x] User selected inline execution in batches, without subagents.
+- [x] Batch 1: Tasks 1-2; local checks recorded below, paused for user review.
+- [ ] Batch 2: Tasks 3-4.
+- [ ] Batch 3: Tasks 5-6.
+
+The existing `linux-hardening` linked worktree was verified clean before source
+edits. No dependency setup or local .NET command is authorized or required for
+these source checks. The Task 1 guard test asserts presence before using
+`index`, so a missing guard produces an assertion failure rather than an
+unrelated `ValueError`.
+
 ---
 
 ### Task 1: Establish the Linux Host Boundary
@@ -66,7 +79,7 @@ Before staging each task, inspect `git status --short` and the diff. Stage only 
 - Consumes: existing `public static async Task Main(string[] args)` and the server's top-level entry point.
 - Produces: unchanged entry-point signatures, early exit status 1 outside Linux, and generated assembly-level `SupportedOSPlatform("linux")` attributes. The attribute informs analysis; the entry-point checks enforce runtime rejection.
 
-- [ ] **Step 1: Create the failing local source contracts.**
+- [x] **Step 1: Create the failing local source contracts.**
 
 Use this initial content for `tests/test_linux_only.py`:
 
@@ -108,7 +121,9 @@ class LinuxHostTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 text = source(path)
-                guard = text.index("if (!OperatingSystem.IsLinux())")
+                guard_text = "if (!OperatingSystem.IsLinux())"
+                self.assertTrue(guard_text in text, f"{path}: Linux guard missing")
+                guard = text.index(guard_text)
                 self.assertLess(guard, text.index(marker))
                 prefix = text[guard:text.index(marker)]
                 self.assertIn("Environment.ExitCode = 1;", prefix)
@@ -120,12 +135,16 @@ class LinuxHostTests(unittest.TestCase):
             self.assertEqual(project.findtext(f".//{name}"), expected)
 ```
 
-- [ ] **Step 2: Observe the baseline failure.**
+- [x] **Step 2: Observe the baseline failure.**
 
 Run locally: `python3 -m unittest tests.test_linux_only.LinuxHostTests -v`.
 Expected: missing assembly attribute and missing early guards fail; the server deployment characterization already passes. Record actual output, not an invented failure count.
 
-- [ ] **Step 3: Add the attribute and both early guards.**
+Observed before implementation: 3 test methods ran, with 3 assertion failures
+(missing assembly attribute and one missing guard per entry point). The server
+deployment characterization passed; there were no test errors.
+
+- [x] **Step 3: Add the attribute and both early guards.**
 
 Append inside `Directory.Build.props`, after its property group:
 
@@ -150,7 +169,7 @@ if (!OperatingSystem.IsLinux())
 
 Replace the server's Homebrew-specific launch comment with an explanation of resolving the content root next to the executable. Leave the three deployment properties unchanged.
 
-- [ ] **Step 4: Re-run the task's contracts and whitespace check.**
+- [x] **Step 4: Re-run the task's contracts and whitespace check.**
 
 ```bash
 python3 -m unittest tests.test_linux_only.LinuxHostTests -v
@@ -159,12 +178,20 @@ git diff --check
 
 Expected: local contracts pass. This does not demonstrate execution on another OS or successful MSBuild attribute generation.
 
-- [ ] **Step 5: Commit the reviewed task files.**
+Observed after implementation: all 3 source-contract tests pass;
+`git diff --check` reports no whitespace errors. The parse-only comparison checks
+129 C# files against the application baseline: 6 retain existing diagnostics,
+and none has additional diagnostics. Compilation and runtime execution are not
+run.
+
+- [x] **Step 5: Commit the reviewed task files.**
 
 ```bash
 git add -- tests/__init__.py tests/test_linux_only.py Directory.Build.props stalker-gamma-cli/Program.cs stalker-gamma-cli-server/Program.cs
 git commit -m "refactor: declare and enforce Linux-only host support"
 ```
+
+Local commit: `c6a3301`. No push or remote execution was performed.
 
 ### Task 2: Remove Windows Elevation and Installer Wiring
 
@@ -181,7 +208,7 @@ git commit -m "refactor: declare and enforce Linux-only host support"
 - Consumes: `CreateSymbolicLinkUtility.Create` at the two installer call sites and constructor-based DI.
 - Produces: `public static void Create(string path, string pathToTarget)`; no PowerShell types, flags, elevated execution, or registration. Existing cache-link trust behavior is unchanged and is not certified secure here.
 
-- [ ] **Step 1: Append failing installer contracts.**
+- [x] **Step 1: Append failing installer contracts.**
 
 ```python
 class LinuxInstallerTests(unittest.TestCase):
@@ -202,11 +229,15 @@ class LinuxInstallerTests(unittest.TestCase):
         self.assertNotIn("OperatingSystem.IsWindows", helper)
 ```
 
-- [ ] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxInstallerTests -v`.**
+- [x] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxInstallerTests -v`.**
 
 Expected: failure on the existing file/references and three-argument call sites.
 
-- [ ] **Step 3: Remove the complete dependency chain, not just its implementation.**
+Observed before implementation: 2 test methods ran with 4 assertion failures
+(both old call sites, the helper's Windows branch, and the existing PowerShell
+file). There were no test errors.
+
+- [x] **Step 3: Remove the complete dependency chain, not just its implementation.**
 
 Replace the link helper with:
 
@@ -242,7 +273,7 @@ bool enableLongPaths = false,
 
 Delete `PowerShellCmd.cs` only after all consumers have been removed. Keep every unrelated full-install option and the offline/resume logic intact.
 
-- [ ] **Step 4: Re-run all current contracts and inspect constructor consistency.**
+- [x] **Step 4: Re-run all current contracts and inspect constructor consistency.**
 
 ```bash
 python3 -m unittest tests.test_linux_only -v
@@ -251,12 +282,30 @@ git diff --check
 
 Check matching base/derived argument order and DI registration in the actual diff. Compilation remains remote-only and not run.
 
-- [ ] **Step 5: Commit only this task's files.**
+Observed after implementation: all 5 current source-contract tests pass;
+`git diff --check` reports no whitespace errors. A source scan finds none of the
+removed PowerShell types, setup flags or elevated command references in C#.
+The parse-only comparison checks 128 remaining C# files, with the same 6
+baseline-diagnostic files and no additional diagnostics. Inline constructor
+inspection confirms 12 matching parameter names/order in the base, derived and
+forwarding lists. No independent subagent review or .NET compilation/runtime
+test was performed.
+
+- [x] **Step 5: Commit only this task's files.**
 
 ```bash
 git add -- tests/test_linux_only.py Stalker.Gamma/Services/PowerShellCmd.cs Stalker.Gamma/Utilities/CreateSymbolicLinkUtility.cs Stalker.Gamma/Extensions/ServiceCollectionExtensions.cs Stalker.Gamma/GammaInstallerServices/GammaInstaller/GammaInstaller.cs Stalker.Gamma/GammaInstallerServices/GammaInstaller/OfflineGammaInstaller.cs stalker-gamma-cli/Commands/FullInstall.cs
 git commit -m "refactor: remove Windows elevation and installer options"
 ```
+
+Local commit: `a81850d`. Together with `c6a3301`, this completes the source edits
+for the first batch only. Review was inline, as selected by the user. Remaining
+non-Linux tool/native/build branches are deliberately left for Tasks 3-6.
+The `downloads -> cache` helper still has its original Linux trust behavior;
+its confinement and existing-link validation remain a later security task.
+No push, CI dispatch, artifact download, toolchain installation, or application
+execution was performed in this batch. Compilation and runtime tests remain
+not run, and the application is not presented as ready to install.
 
 ### Task 3: Select Linux Runtime Adapters and Preserve Wine Configuration
 
@@ -877,4 +926,4 @@ Before any later download/run proposal, list the actual artifact/tool, source an
 - [x] Exact new helper signatures match their named consumers; server deployment remains non-AOT.
 - [x] Local parse comparison accounts for existing grammar diagnostics and is not called compilation.
 - [x] No task requires local .NET commands, new dependencies, live installation, network downloads or publishing.
-- [ ] User selects inline or subagent-driven execution; implementation has not started.
+- [x] User selected inline execution in batches; source-contract execution has started.
