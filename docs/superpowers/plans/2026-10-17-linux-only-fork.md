@@ -56,7 +56,7 @@ Before staging each task, inspect `git status --short` and the diff. Stage only 
 - [x] User selected inline execution in batches, without subagents.
 - [x] Batch 1: Tasks 1-2; local checks recorded below, paused for user review.
 - [x] Batch 2: Tasks 3-4; local checks recorded below, paused for user review.
-- [ ] Batch 3: Tasks 5-6.
+- [ ] Batch 3: Tasks 5-6 (in progress: Task 6 verified, documentation commit pending).
 
 The existing `linux-hardening` linked worktree was verified clean before source
 edits. No dependency setup or local .NET command is authorized or required for
@@ -660,7 +660,7 @@ started. Pause here for the user's next batch review.
 - Consumes: `make build appimage -C build/linux VERSION=<assembly-version> ARCH=x64|arm64`, plus the remote regression project from Task 3.
 - Produces: explicit CLI/server Linux RIDs, two manually built Linux artifacts per architecture and their checksum file, no release/package publishing jobs.
 
-- [ ] **Step 1: Append failing delivery contracts.**
+- [x] **Step 1: Append failing delivery contracts.**
 
 ```python
 class LinuxDeliveryTests(unittest.TestCase):
@@ -699,11 +699,25 @@ class LinuxDeliveryTests(unittest.TestCase):
 
 These are source contracts and a Make dry run, not a complete YAML/schema validator or a build.
 
-- [ ] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxDeliveryTests -v`.**
+The implemented tests also cover rejection of an unsupported `ARCH=riscv64`,
+the draft's output checksum files, the exact three non-publishing jobs, and
+disabled persisted credentials for each checkout. Make invocations use
+`--dry-run` and a timeout. The existing Makefile was inspected first: it has
+no `$(shell ...)`, recursive Make recipe, forced-execution recipe, or include
+that would execute downloads/compilation while performing these dry runs.
+
+- [x] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxDeliveryTests -v`.**
 
 Expected: the existing packaging, omitted CLI RID, push trigger and publishing jobs fail the contracts. The dry run must not execute a compiler, downloader, or packaging tool.
 
-- [ ] **Step 3: Correct the RID and remove the listed packaging files.**
+Observed before implementation: 4 test methods ran with 7 assertion failures
+(the push trigger, one missing CLI RID per supported architecture, accepted
+unsupported architecture, both non-Linux packaging directories, and the cask
+generator). No test errors occurred. CI assertions after its trigger check
+were not reached in this red run. The inspected Makefile only printed recipes;
+no compiler, downloader or packaging tool was executed.
+
+- [x] **Step 3: Correct the RID and remove the listed packaging files.**
 
 Add beside the CLI project variable:
 
@@ -726,7 +740,7 @@ Keep the existing separate recipe locations. Replace `CURL_ARCH := unknown` in t
 
 Do not execute `make build`, `make appimage` or `make clean`. Retain the known unverified tool downloads as explicitly pending supply-chain hardening; this task does not authorize fetching or running them. Delete only the eight listed non-Linux packaging files using file-specific patches.
 
-- [ ] **Step 4: Replace the workflow with this manual, non-publishing draft.**
+- [x] **Step 4: Replace the workflow with this manual, non-publishing draft.**
 
 ```yaml
 name: Linux builds
@@ -812,7 +826,7 @@ jobs:
 
 This draft retains existing Action/tool version tags rather than inventing immutable pins. Before any authorized execution, the supply-chain stage must resolve trusted Action SHAs, SDK/tool versions and download checksums, including the mutable AppImage tool. Artifact hashes describe outputs, not trustworthy verification of build inputs. This plan does not enable Actions, push, merge, dispatch, publish a release or download artifacts.
 
-- [ ] **Step 5: Run all local contracts and static checks.**
+- [x] **Step 5: Run all local contracts and static checks.**
 
 ```bash
 python3 -m unittest tests.test_linux_only -v
@@ -824,12 +838,34 @@ sh -n build/linux/stalker-gamma-server.AppDir/AppRun
 
 Record that workflow execution and full YAML/action validation are not run. Do not install `actionlint` to remove that limitation.
 
-- [ ] **Step 6: Commit only the build/workflow/test changes and named deletions.**
+Observed after implementation: all 14 current local tests pass, including
+Make dry runs for both explicit Linux RIDs and an unsupported-architecture
+rejection. `git diff --check`, `bash -n` for the retained package generator,
+and separate `sh -n` invocations for both AppRun wrappers exit successfully.
+The deletion list contains exactly the eight approved non-Linux packaging
+files. Inline review checked the workflow's sole manual trigger, read-only
+token, three checkouts without persisted credentials, two Linux matrix legs,
+regression command, artifact paths, checksum outputs and lack of publishing
+jobs. Context7 reconfirmed the manual-trigger/default-branch and minimal-token
+documentation. Workflow execution and full YAML/Action validation were not
+run; `actionlint` is absent and no tool was installed. Existing mutable
+Action/tool tags and unverified download inputs remain deliberately pending.
+
+Staging note: `git add` returned an ignored-`build` warning after staging
+the intended changes. Investigation found the pre-existing `build/` rule at
+`.gitignore:22`; the index already contained exactly the 11 reviewed task
+files (including all 8 deletions). No ignore rule was changed, no ignored
+artifact was forced into Git, and the staged file list was checked before
+committing.
+
+- [x] **Step 6: Commit only the build/workflow/test changes and named deletions.**
 
 ```bash
 git add -- tests/test_linux_only.py .github/workflows/build.yml build/linux/Makefile build/mac/Makefile build/mac/README.md build/win/BUILD.md build/win/build.bat build/win/build.ps1 build/win/chocolatey.bat build/win/chocolatey.ps1 build/update-cask.sh
 git commit -m "build: retain Linux packaging and disable inherited publishing"
 ```
+
+Local commit: `2f35473`. No push, CI dispatch or artifact download was performed.
 
 ### Task 6: Document the Fork and Record Verification Limits
 
@@ -844,7 +880,7 @@ git commit -m "build: retain Linux packaging and disable inherited publishing"
 - Consumes: the Linux-only behavior, remote-only compilation policy and non-publishing CI from Tasks 1-5.
 - Produces: accurate fork documentation and Linux package metadata; no promise of a validated artifact, secure installation or completed security fixes.
 
-- [ ] **Step 1: Append failing documentation contracts.**
+- [x] **Step 1: Append failing documentation contracts.**
 
 ```python
 class LinuxDocumentationTests(unittest.TestCase):
@@ -867,11 +903,17 @@ class LinuxDocumentationTests(unittest.TestCase):
         self.assertNotIn("https://github.com/FaithBeam/stalker-gamma-cli", package)
 ```
 
-- [ ] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxDocumentationTests -v`.**
+- [x] **Step 2: Run `python3 -m unittest tests.test_linux_only.LinuxDocumentationTests -v`.**
 
 Expected: current fork/build-policy/prerequisite/package-URL contracts fail.
 
-- [ ] **Step 3: Update documentation without inventing a release or runtime result.**
+Observed before implementation: 2 test methods ran with 8 assertion failures
+(the Wine/tar documentation, fork package URL, four missing fork/build-policy
+markers, and the remaining non-Linux install reference). There were no test
+errors. The upstream package-URL absence assertion follows the missing-fork
+assertion and was not reached separately in this red run.
+
+- [x] **Step 3: Update documentation without inventing a release or runtime result.**
 
 Use these exact concepts in `README.md`, retaining the existing command/features/update reference, upstream attribution, and unchanged `LICENSE`:
 
@@ -898,7 +940,7 @@ Replace the Windows/macOS install and local build tables; do not direct this use
 
 In `build/update-pkgbuild.sh`, replace the three project/release URL occurrences of `https://github.com/FaithBeam/stalker-gamma-cli` with `https://github.com/4nibhal/stalker-gamma-cli`. Keep it a dormant manual generator; no AUR publication or verified release availability is implied.
 
-- [ ] **Step 4: Run the complete local checks and compare C# parser diagnostics with the baseline.**
+- [x] **Step 4: Run the complete local checks and compare C# parser diagnostics with the baseline.**
 
 ```bash
 python3 -m unittest tests.test_linux_only -v
@@ -955,6 +997,26 @@ PY
 
 Inspect the complete final diff against the application baseline, accounting separately for the existing ignore/design commits. Confirm no game payload filenames, browser OS fingerprint, server network policy, external hash reference, or unrelated generated clients were rewritten. Run installed ShellCheck on the retained shell wrappers and generator; report pre-existing warnings rather than refactoring unrelated scripts to silence them.
 
+Observed after implementation: all 16 local source/dry-run tests pass.
+`git diff --check` against both HEAD and the application baseline,
+`bash -n` for the package generator, separate `sh -n` checks for the two
+AppRun wrappers, and installed ShellCheck for all three retained shell files
+exit successfully; ShellCheck reports no diagnostics. The installed C# parser
+compares 129 files (128 application files and 1 regression source): 6 retain
+baseline diagnostics and none adds diagnostics. All 6 project/property XML
+files parse. CSharpier and C# compilation were not run.
+
+The final source/build/test/documentation diff was reviewed inline. Its 43
+changed paths match the planned scope, including the prior `.gitignore` and
+design/plan additions. `LICENSE`, both AppDir trees, the README command/features
+reference, and the INI template from `modOrganizerIniPath` onward remain
+unchanged from baseline. The package generator differs only in its 3 project/
+release URLs. C# hash literals are unchanged, and only the approved host-tool/
+library executable names were removed; game payload names remain. Apart from
+its early Linux guard/comment, the companion server is unchanged; browser
+fingerprint, network policy and unrelated generated clients were not rewritten.
+No independent subagent review was performed, per the user's inline selection.
+
 - [ ] **Step 5: Record an evidence-based handoff and commit documentation.**
 
 Mark only observed local checks as passing. Leave these explicitly **not run**: .NET compilation, remote C# regression, native curl/ABI tests, workflow execution, actual installer/game/server operation, and verification of downloaded tools/mods. Do not call the application ready for personal installation. List the next security stage without publishing the private audit or exploit details.
@@ -963,6 +1025,37 @@ Mark only observed local checks as passing. Leave these explicitly **not run**: 
 git add -- README.md build/linux/README.md build/update-pkgbuild.sh tests/test_linux_only.py docs/superpowers/specs/2026-10-17-linux-only-fork-design.md docs/superpowers/plans/2026-10-17-linux-only-fork.md
 git commit -m "docs: explain Linux fork usage and remote-only build limits"
 ```
+
+## Verification Handoff
+
+| Check | Observed local result |
+|---|---|
+| Python source contracts and Make dry runs | 16 tests pass; x64/arm64 RIDs explicit; unsupported architecture rejected |
+| Whitespace | HEAD and baseline diff checks pass |
+| Retained shell scripts | Syntax checks and ShellCheck pass, no diagnostics |
+| C# parse-only comparison | 129 files; same 6 baseline-diagnostic files; no additional diagnostics |
+| XML project/property parsing | All 6 files parse |
+| Scope/preservation review | 43 scoped paths; license, AppDir trees, Wine payload names/INI template and hash references preserved |
+
+**Not run / not verified:** local or remote .NET compilation, CSharpier,
+the isolated C# Wine INI regression, native curl/ABI tests, full YAML/Action
+validation, workflow execution, AppImage startup, actual installer/game/server/
+container operation, and authenticity/integrity of downloaded tools or mods.
+Preparing an output-checksum step is not build-input verification.
+
+The workflow remains an unexecuted manual draft. Its inherited mutable Action,
+SDK/tool tags, AppImage `continuous` input and download checksums must be
+reviewed and made immutable/verified before a separately authorized CI run.
+No artifact download or SDK installation, CI dispatch, push, merge, publishing,
+or live installation was performed in Batch 3.
+
+Keep `linux-hardening` and its existing worktree. Integration and remote-runtime
+verification remain gated; this source conversion is not an application-ready
+or security-complete handoff. The next implementation scope needs its own
+design/tests: filesystem names, path and symlink confinement (including the
+intentional cache link), followed by download integrity/atomicity, permissions,
+subprocess/server controls and supply-chain hardening. Private audit material
+remains excluded from Git and no upstream disclosure is authorized.
 
 ## Execution and Publication Gate
 

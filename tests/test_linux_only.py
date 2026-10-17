@@ -304,3 +304,35 @@ class LinuxDeliveryTests(unittest.TestCase):
             len(re.findall(r"uses: actions/checkout@", text)),
             text.count("persist-credentials: false"),
         )
+
+
+class LinuxDocumentationTests(unittest.TestCase):
+    def test_readme_identifies_the_fork_and_remote_build_policy(self):
+        text = source("README.md")
+        for required in (
+            "https://github.com/4nibhal/stalker-gamma-cli",
+            "Linux-only",
+            "No local .NET SDK or C# compiler",
+            "workflow_dispatch",
+        ):
+            with self.subTest(symbol=required):
+                self.assertTrue(required in text, f"Fork/build policy missing: {required}")
+        self.assertIsNone(
+            re.search(r"Windows-Install|MacOS-Install|build/win|build/mac", text),
+            "README still directs users to non-Linux host support",
+        )
+
+    def test_linux_usage_preserves_wine_and_fork_package_urls(self):
+        text = source("build/linux/README.md")
+        for required in ("ModOrganizer.exe", "Wine", "tar", "unzip"):
+            with self.subTest(symbol=required):
+                self.assertTrue(required in text, f"Linux usage requirement missing: {required}")
+        package = source("build/update-pkgbuild.sh")
+        self.assertTrue(
+            "https://github.com/4nibhal/stalker-gamma-cli" in package,
+            "Package generator does not identify the fork",
+        )
+        self.assertFalse(
+            "https://github.com/FaithBeam/stalker-gamma-cli" in package,
+            "Package generator still targets upstream releases",
+        )

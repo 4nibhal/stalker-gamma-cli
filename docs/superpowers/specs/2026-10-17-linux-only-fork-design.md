@@ -130,7 +130,22 @@ security requirements remain applicable to the later stages.
 - [x] User review of the initial written specification.
 - [x] User review of the remote-compilation/no-local-compiler clarification.
 - [x] Write implementation plan.
-- [x] Add and run failing source-invariant tests for Tasks 1-4; Tasks 5-6 contracts remain to be added.
+- [x] Add and run failing source/dry-run contracts for Tasks 1-6, followed by passing local runs.
 - [x] Complete source conversion for the host boundary, installer wiring, runtime adapters and native curl (Tasks 1-4); local static checks only, remote .NET/runtime verification not run.
-- [ ] Remove non-Linux host support and fork-unsafe publishing.
-- [ ] Run available checks and report .NET verification blockers explicitly.
+- [x] Remove non-Linux host support and fork-unsafe publishing in source; the manual Linux workflow remains an unexecuted draft.
+- [x] Run available local checks and report .NET/runtime verification blockers explicitly.
+
+## Verification status after the source conversion
+
+- 16 local Python source/dry-run tests pass. Shell syntax, installed ShellCheck,
+  whitespace and XML checks pass. The C# parser compares 129 files, with the
+  existing six baseline-diagnostic files and no additional diagnostics.
+- .NET compilation, CSharpier, the isolated C# Wine configuration regression,
+  native ABI/runtime tests, full YAML/Action validation, workflow execution,
+  actual installation and tool/mod authenticity verification are **not run**.
+- No local SDK, artifact download, CI dispatch, installer/server/container
+  execution, push, merge or publication is part of this handoff. Preserve the
+  branch and worktree; do not treat this as ready for personal installation.
+- Filesystem, download, permissions, subprocess/server and supply-chain security
+  stages remain separate work. Mutable build inputs must be pinned and verified
+  before any separately authorized remote build.

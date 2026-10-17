@@ -1,6 +1,40 @@
-# stalker-gamma-cli
+# stalker-gamma-cli — Linux-only personal fork
 
-_stalker-gamma-cli_ is a cli to install Stalker Anomaly and the GAMMA mod pack.
+Personal fork: https://github.com/4nibhal/stalker-gamma-cli
+
+Derived from https://github.com/FaithBeam/stalker-gamma-cli; the existing
+[GPLv3 license](LICENSE) is retained.
+
+_stalker-gamma-cli_ is a CLI to install Stalker Anomaly and the GAMMA mod pack.
+This fork targets Linux x64 and arm64. Game and Mod Organizer executables remain
+Windows payloads run with Wine; they are not Windows host support for the installer.
+
+## Build and verification policy
+
+No local .NET SDK or C# compiler is required by this fork's intended end-user
+workflow. The CLI is configured for NativeAOT; the optional companion server
+bundles its .NET runtime without AOT. Native/system library requirements still
+apply.
+
+Compilation is planned on GitHub-hosted Linux runners using manual
+`workflow_dispatch` only. Preparing the workflow is not an executed or verified
+build. Builds need separate authorization and completed build-input verification;
+there is no automatic package or release publication. Action/tool versions and
+download checksums still need supply-chain hardening before any dispatch.
+
+Local checks use `python3 -m unittest tests.test_linux_only -v`. These source
+contracts and Make dry runs do not replace compilation, runtime regression tests,
+or downloaded-content verification. No validated fork release is claimed here.
+
+See [Linux usage](build/linux/README.md) for the installation layout and Wine
+configuration. The platform conversion does not complete the staged filesystem,
+download, permissions, subprocess, optional-server or supply-chain security work.
+The converted application is not yet presented as ready for personal installation.
+
+## Commands
+
+The existing command reference is retained below; it has not been runtime-verified
+as part of this source conversion.
 
 ```
 ❯ stalker-gamma
@@ -40,45 +74,27 @@ Commands:
 
 ### Install
 
-| OS | Method                                                                                 |
-|----------|----------------------------------------------------------------------------------------|
-| Windows  | [Windows Install](https://github.com/FaithBeam/stalker-gamma-cli/wiki/Windows-Install) |
-| Linux    | [Linux Install](https://github.com/FaithBeam/stalker-gamma-cli/wiki/Linux-Install)     |
-| macOS    | [MacOS Install](https://github.com/FaithBeam/stalker-gamma-cli/wiki/MacOS-Install)     |
+The [Linux usage reference](build/linux/README.md) preserves the configuration and
+installation examples. It is documentation, not authorization to download content
+or run the installer during this work.
 
 ### Update
 
 After you've performed a full-install, you can update your installation.
 
-Check for updates and apply:
+Existing update usage (not executed or validated in this conversion):
 
 ```bash
 stalker-gamma update check
 stalker-gamma update apply
 ```
 
-## Build
-
-| Platform | Commands                       |
-|----------|--------------------------------|
-| Windows  | `cd build/win; build.bat`      |
-| Linux    | `cd build/linux && make build` |
-| macOS    | `cd build/mac && make build`   |
-
-Artifacts in the `build/stalker-gamma-cli` folder.
-
 ## Troubleshooting
 
-[Troubleshooting wiki](https://github.com/FaithBeam/stalker-gamma-cli/wiki/Troubleshooting)
+[Upstream troubleshooting wiki](https://github.com/FaithBeam/stalker-gamma-cli/wiki/Troubleshooting).
+Upstream documentation is background material, not a verified setup guide for this fork.
 
-## Development
+## Advanced Options
 
-### Requirements
-
-- .NET 10 SDK
-- 7zz, curl-impersonate, cacert.pem in stalker-gamma-cli/bin/debug/net10.0/resources folder
-  - These dependencies can be retrieved by running your platform's `make build` command and copying the `resources` folder to the proper location
-
-### Advanced Options
-
-[Advanced](https://github.com/FaithBeam/stalker-gamma-cli/wiki/Advanced)
+[Upstream advanced options](https://github.com/FaithBeam/stalker-gamma-cli/wiki/Advanced).
+Refer to the build and verification policy above rather than installing a local SDK.

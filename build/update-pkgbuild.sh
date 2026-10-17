@@ -38,12 +38,12 @@ pkgver=${VERSION}
 pkgrel=1
 pkgdesc="${PKGDESC}"
 arch=('x86_64' 'aarch64')
-url="https://github.com/FaithBeam/stalker-gamma-cli"
+url="https://github.com/4nibhal/stalker-gamma-cli"
 license=('GPL-3.0-or-later')
 options=(!strip)
 depends=(${DEPENDS})
-source_x86_64=("${ASSET}+linux.x64-\${pkgver}.AppImage::https://github.com/FaithBeam/stalker-gamma-cli/releases/download/\${pkgver}/${ASSET}+linux.x64.AppImage")
-source_aarch64=("${ASSET}+linux.arm64-\${pkgver}.AppImage::https://github.com/FaithBeam/stalker-gamma-cli/releases/download/\${pkgver}/${ASSET}+linux.arm64.AppImage")
+source_x86_64=("${ASSET}+linux.x64-\${pkgver}.AppImage::https://github.com/4nibhal/stalker-gamma-cli/releases/download/\${pkgver}/${ASSET}+linux.x64.AppImage")
+source_aarch64=("${ASSET}+linux.arm64-\${pkgver}.AppImage::https://github.com/4nibhal/stalker-gamma-cli/releases/download/\${pkgver}/${ASSET}+linux.arm64.AppImage")
 sha256sums_x86_64=('${X64_SUM}')
 sha256sums_aarch64=('${ARM64_SUM}')
 
