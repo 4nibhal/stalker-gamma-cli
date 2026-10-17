@@ -13,9 +13,9 @@ The user approved the functional design after selecting:
   stops the operation; do not replace, delete or migrate it automatically.
 
 This document specifies proposed behavior, not implemented or runtime-verified
-protection. Review of the written specification is required before preparing an
-implementation plan. Production code and regression sources are unchanged at
-this design checkpoint.
+protection. After the design summary, the user's subsequent **“adelante”**
+authorized implementation planning. Production code and regression sources remain
+unchanged; implementation-plan approval is a separate gate.
 
 ## Scope and execution constraints
 
@@ -246,5 +246,6 @@ passes is allowed before separately authorized remote compilation/execution.
 4. Obtain separate authorization and verified build inputs before any remote
    execution; report runtime results only from actual evidence.
 
-Written-spec review and implementation-plan approval are pending. No stage of
-this handoff authorizes installing or running the application for personal use.
+The planning gate is cleared; implementation-plan approval remains pending. No
+stage of this handoff authorizes installing or running the application for
+personal use.

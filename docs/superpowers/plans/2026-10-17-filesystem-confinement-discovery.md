@@ -18,8 +18,29 @@ and branch are retained.
 - [x] Present the proposed design and obtain the user's approval.
 - [x] Write and locally commit the approved specification.
 - [x] Self-review the specification for gaps, contradictions and scope.
-- [ ] Ask the user to review the written specification; await approval.
-- [ ] Load `writing-plans` only after written-spec approval.
+- [x] Ask the user to review the written specification; await approval.
+- [x] Load `writing-plans` only after written-spec approval.
+
+## Planning authorization and checklist
+
+After requesting a design summary, the user replied **“adelante”** to continue
+with implementation planning. This clears the written-design/planning gate only;
+it does not authorize implementation or execution. The next document is
+`docs/superpowers/plans/2026-10-18-filesystem-confinement.md`.
+
+- [x] Verify the current branch, clean starting worktree, specification and source interfaces.
+- [x] Map shared policy, alias consumers, managed I/O, error/recovery paths and regression access.
+- [x] Write concrete interfaces and independently reviewable test-first tasks.
+- [x] Self-review specification coverage, placeholders and signature consistency.
+- [x] Verify documentation-only changes and record available local checks.
+- [ ] Obtain implementation-plan approval before beginning the first inline batch.
+
+Planning verification: the 10-task plan has four inline review batches and no
+completed implementation steps. `python3 -m unittest discover -s tests -v`
+passes the 16 existing source/dry-run tests; document fence/placeholder/Python
+snippet checks and `git diff --check` pass. The change set contains only this
+tracker, the specification's approval status and the new plan. No production or
+test source, downloaded artifact or CI execution is part of this checkpoint.
 
 ## Evidence boundaries
 
@@ -61,8 +82,8 @@ not be presented as a complete sandbox or a complete fix of filesystem risks.
 ## Approved functional Batch 4A design
 
 The user selected **Aprobar diseño** after the design summary and its alias,
-metadata, separator and compatibility details were presented. The written
-specification still needs the separate user-review gate before planning.
+metadata, separator and compatibility details were presented. The subsequent
+**“adelante”** authorized preparation of the implementation plan, not its execution.
 
 The normative design and planned test matrix are in
 `docs/superpowers/specs/2026-10-17-filesystem-confinement-design.md`.
@@ -94,6 +115,6 @@ the static data-flow inventory are recorded separately in ignored
 - Before the specification commit, the staged list was verified to contain
   only that document. Production/test files were unchanged. Private evidence
   is ignored by `.gitignore:4` and was not staged.
-- Written-spec user review and `writing-plans` remain pending. Ask the user to
-  review the specification before planning; do not interpret functional-design
-  approval as authorization to implement, compile or run CI.
+- At this design checkpoint, written-spec user review and `writing-plans` were
+  pending. The subsequent planning authorization is recorded above; implementation,
+  compilation and CI remain unauthorized.
