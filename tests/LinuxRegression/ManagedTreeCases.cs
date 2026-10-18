@@ -28,6 +28,8 @@ internal static class ManagedTreeCases
         InstructionsRejectProducedSourceConflictsBeforeAnyMove();
         InstructionsReprepareSourcesProducedByEarlierSteps();
         InstructionsComposeSuccessiveProducedSources();
+        InstructionsReuseConsumedProducedFilePathsAsDirectories();
+        InstructionsStillRejectLiveProducedFileDirectoryConflicts();
         InstructionsChooseDestinationFromProducedGamedata();
         InstructionsDoNotProjectConsumedOrExcludedContents();
         EmptyAndBlankInstructionsCreateNothingButLiteralZeroExecutes();
@@ -554,6 +556,43 @@ internal static class ManagedTreeCases
         foreach (var consumed in new[] { "package/gamedata/stage-a/stage-b/data.txt",
             "gamedata/stage-a/stage-b/data.txt", "gamedata/stage-b/data.txt" })
             Check.True(!File.Exists(Path.Join(root, consumed)), "A composed source file was not moved.");
+    });
+
+    private static void InstructionsReuseConsumedProducedFilePathsAsDirectories() => WithTree(tree =>
+    {
+        var root = tree.Dir("extract");
+        tree.File("extract/package/gamedata/first/group/conflict", "first");
+        tree.File("extract/package/gamedata/last/group/conflict/child", "last");
+        var retained = tree.File("extract/unrelated/keep", "unchanged");
+        File.SetUnixFileMode(retained, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead);
+        var retainedBefore = tree.Capture(retained);
+        ProcessInstructions.Process(root, ["package", "gamedata/first", "gamedata/group", "gamedata/last"], default);
+        Check.SequenceEqual(new byte[] { 0x66, 0x69, 0x72, 0x73, 0x74 },
+            File.ReadAllBytes(Path.Join(root, "gamedata", "conflict")));
+        var reused = Path.Join(root, "gamedata", "group", "conflict");
+        Check.True(Directory.Exists(reused), "The consumed produced-file path was not reused as a directory.");
+        Check.True(!File.Exists(reused), "The consumed produced-file path still names a file.");
+        Check.SequenceEqual(new byte[] { 0x6c, 0x61, 0x73, 0x74 }, File.ReadAllBytes(Path.Join(reused, "child")));
+        foreach (var consumed in new[] { "package/gamedata/first/group/conflict",
+            "package/gamedata/last/group/conflict/child", "gamedata/first/group/conflict",
+            "gamedata/last/group/conflict/child" })
+            Check.True(!Path.Exists(Path.Join(root, consumed)), "An original or intermediate source file was not moved: " + consumed);
+        tree.AssertUnchanged(retainedBefore);
+    });
+
+    private static void InstructionsStillRejectLiveProducedFileDirectoryConflicts() => WithTree(tree =>
+    {
+        var root = tree.Dir("extract");
+        var first = tree.File("extract/package/gamedata/first/group/conflict", "first");
+        var last = tree.File("extract/package/gamedata/last/group/conflict/child", "last");
+        foreach (var directory in new[] { root, Path.GetDirectoryName(first)!, Path.GetDirectoryName(last)! })
+            File.SetUnixFileMode(directory, DirectoryMode);
+        foreach (var file in new[] { first, last })
+            File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead);
+        var before = tree.Capture(root); // all bytes, inventories, file AND directory modes
+        Check.Throws<UnsafePathException>(() => ProcessInstructions.Process(root,
+            ["package", "gamedata/first", "gamedata/last"], default));
+        tree.AssertUnchanged(before);
     });
 
     private static void InstructionsChooseDestinationFromProducedGamedata()

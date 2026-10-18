@@ -225,6 +225,17 @@ class ManagedTreeSourceTests(unittest.TestCase):
         for forbidden in ("new CheckedEntry(", "new CheckedTree(", "ExecuteCopy(", "Directory.CreateDirectory"):
             self.assertNotIn(forbidden, known)
 
+    def test_instruction_role_requirements_are_scoped_to_each_projected_step(self):
+        text = source(SERVICES + "ProcessInstructions.cs")
+        known = section(text, "private static void PrepareKnownInstructions(", "private static IReadOnlyList<KnownInstructionMapping> PrepareKnownMappings(")
+        prefix, loop = known.split("foreach (var path in parsed.Paths)", 1)
+        # Lifetime wiring only, not execution of the C# path/type policy.
+        self.assertIn("var knownContents =", prefix)
+        self.assertNotIn("var knownContents =", loop)
+        self.assertNotIn("var requiredKinds =", prefix)
+        self.assertIn("var requiredKinds =", loop)
+        self.assertLess(loop.index("var requiredKinds ="), loop.index("PrepareKnownMappings("))
+
     def test_metadata_and_separator_guard_all_targets_before_io(self):
         metadata = source(SERVICES + "WriteAddonMetaIni.cs")
         self.assertIn("InputPolicy.RequireComponent(", metadata)
@@ -252,6 +263,7 @@ class ManagedTreeSourceTests(unittest.TestCase):
             "InspectionDenialIsNotSkippedAsAPermissionMutationFailure",
             "InstructionsValidateTheWholeOrderedListBeforeMoving", "InstructionsPrepareKnownTypesAndFutureConflicts",
             "InstructionsRejectProducedSourceConflictsBeforeAnyMove", "InstructionsComposeSuccessiveProducedSources",
+            "InstructionsReuseConsumedProducedFilePathsAsDirectories", "InstructionsStillRejectLiveProducedFileDirectoryConflicts",
             "InstructionsChooseDestinationFromProducedGamedata", "InstructionsDoNotProjectConsumedOrExcludedContents",
             "InstructionsReprepareSourcesProducedByEarlierSteps", "EmptyAndBlankInstructionsCreateNothingButLiteralZeroExecutes",
             "CancellationPrecedesNoOpsAndFollowsEveryCallback", "NearIoRechecksRejectCallbackIntroducedLinks",

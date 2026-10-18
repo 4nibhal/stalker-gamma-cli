@@ -56,10 +56,11 @@ internal static class ProcessInstructions
         // selected mappings compose here; actual steps still prepare physically.
         var knownContents = existingTree.Entries.Where(entry => entry.Kind != EntryKind.Missing)
             .ToDictionary(entry => entry.FullPath, entry => entry.Kind, StringComparer.Ordinal);
-        var requiredKinds = new Dictionary<string, EntryKind>(StringComparer.Ordinal);
         foreach (var path in parsed.Paths)
         {
             ct.ThrowIfCancellationRequested();
+            // Proposed roles are step-local; knownContents retains current types across steps.
+            var requiredKinds = new Dictionary<string, EntryKind>(StringComparer.Ordinal);
             var mappings = PrepareKnownMappings(boundary, path, knownContents, requiredKinds, ct);
             ComposeKnownMappings(boundary.Root, knownContents, mappings, ct);
         }
