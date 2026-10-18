@@ -12,7 +12,7 @@
 
 - Tested application revision: `71e9c8839064cb56e4761f04c1cfb9e8ba8ef642`; preserve its production sources and C# fixtures unchanged.
 - Retain the existing isolated `linux-hardening` worktree and ignored private evidence. Only the coordinator stages, commits, pushes and dispatches.
-- Manual `workflow_dispatch` only; `permissions: contents: read`; no external actions, secrets, releases, uploads, packaging or workflow-side Git push.
+- Final workflow is manual `workflow_dispatch` only; `permissions: contents: read`; no external actions, secrets, releases, uploads, packaging or workflow-side Git push. The later user-approved Task3 temporarily adds one branch/path-restricted push event with every job guarded off; restore manual-only before Task4.
 - Native `ubuntu-22.04` / `linux-x64` / `x86_64` / `amd64` and `ubuntu-22.04-arm` / `linux-arm64` / `aarch64` / `arm64`; `fail-fast: false` and a bounded job timeout.
 - Remote payload writes stay under `/tmp/stalker-gamma-ci/`: `source`, `nuget`, `dotnet-home`, `scratch`, `out`. Runner infrastructure writes are outside application control.
 - Use only preinstalled SDK `10.0.401` with generated `global.json` setting `rollForward: disable`, `allowPrerelease: false`. Missing tools/development libraries/SDK stop verification; never install a fallback.
@@ -127,6 +127,10 @@ single manual dispatch as the CLI command, not an enable/settings workaround.
 
 If GitHub does not register/permit that workflow, stop and report the API response; do not enable settings, alter default branch, merge, add another trigger or run master's original publishing workflow.
 
+That original stop gate was reached with404. The subsequent explicit user approval
+below permits only the bounded Task3 probe and Task4 single retry, not settings,
+default-branch changes or execution of master's workflow.
+
 - [ ] **Step 3 — wait and inspect.** Observe the exact run by its workflow SHA/ref; wait via an installed CLI/API without downloading artifacts or using log-cache commands. Read metadata and job-log text into tool output only; never `gh run download`, `gh run view --log` (which may cache logs), ZIP download or SDK/compiler locally. Record actual image/runner/SDK versions, fixed source SHA, step outcomes, complete compiler/test error messages and conditional-denial messages. A queued/missing arm64 leg, skipped suite or failed prerequisite is not a complete pass.
 - [ ] **Step 4 — bounded outcome.** Have independent read-only agents interpret separate architecture/job results when independent evidence exists. Update the ledger with facts and sources and provide the run URL. If compilation/runtime/publication fails, report the exact blocker without silently fixing sources/assertions or dispatching repeated runs. Do not continue cache/stop work. Even full success proves only the source checks, five-project compilation, six existing synthetic suites and configured publication contracts, not installation readiness, real integrations or complete security.
 
@@ -147,3 +151,81 @@ The consent and acceptance map are covered by the two tasks; no new feature, dep
 
 These are command/documentation sources, not evidence that this source compiles
 or that a remote runner has any particular installed tool. Actual outputs decide.
+
+## Approved amendment — controlled registry probe
+
+The owner reported that the initial fork-activation banner does not appear.
+Read-only observations establish an empty workflow registry, not its cause. A
+matching working parent workflow and caller repo/workflow scopes were verified;
+no new execution has occurred. The user then selected **“Probar y reintentar
+(Recommended)”**, expressly authorizing two commits/push: a temporary event with
+all jobs skipped, its removal, and one manual retry only if registration succeeds.
+The same fixed application SHA, NuGet exception, preinstalled SDK, paths and
+runtime limits remain in force. This is a hypothesis test, not a confirmed fix.
+
+### Task 3: Probe registration with every push job skipped, then restore
+
+**Files:** Temporarily modify `.github/workflows/build.yml` only as shown below;
+include this plan amendment in the first commit. Private checker/review/results
+stay in the existing ignored plan workspace. Do not modify any source test,
+production/project/C#fixture, setting, credential, default branch or master ref.
+
+**Interfaces:** Consumes reviewed workflow8627071745cfa47863df966857052c2254702066
+and its exact blob1539136ef7de46a1979c72bf6bd169878e6c32c1. Produces remote
+registration/skip evidence and a second commit restoring that workflow byte-for-byte.
+
+- [ ] Write a private source-only checker using already-installed PyYAML BaseLoader.
+  Load the baseline with `git show 8627071:.github/workflows/build.yml` and the
+  current file. Require exactly the following event map/sole-job condition:
+
+```yaml
+on:
+  workflow_dispatch:
+  push:
+    branches: [linux-hardening]
+    paths: [.github/workflows/build.yml]
+jobs:
+  verify:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+```
+
+  Require all remaining parsed workflow data identical to the baseline after
+  removing only the added push key and sole-job if key. Run the checker before
+  mutation and record expected assertion-only RED for the missing probe.
+- [ ] Add only those trigger/guard keys, run the private checker GREEN, parse YAML
+  and syntax-check run blocks without executing them; get an independent review
+  of that exact delta before publication. Run existing Python discovery and
+  explicitly preserve the expected manual-only CI-guard failure during this
+  approved temporary exception; do not skip, edit or weaken that guard or any
+  domain assertion. After restoration require the full82checks pass again.
+- [ ] Coordinator verifies clean expected source/ref/private paths, stages only
+  workflow/plan and creates the first local commit, then non-force pushes only
+  linux-hardening. The proposed guard uses the documented job-level condition
+  evaluated before strategy.matrix. Inspect actual remote workflow registry and
+  matching push-run/job metadata: no runner/build/package step may execute.
+- [ ] Regardless of registration outcome, remove exactly the added trigger/guard,
+  assert workflow blob equals1539136ef7de46a1979c72bf6bd169878e6c32c1, run full
+  local Python discovery/diff checks, create/push the second commit. Do not reset
+  or rewrite history. Master must remain untouched; stop if independent work
+  appears instead of overwriting it. Retain both experiment commits/evidence.
+
+### Task 4: One authorized manual retry, only after restoration and registration
+
+**Files:** Ignored result/ledger only. No production/C# fixture repair.
+
+**Interfaces:** Consumes registered build.yml and the restored manual-only
+workflow source at the second commit; produces actual CI results or a new blocker.
+
+- [ ] Require the registry to contain exactly the intended build.yml and the
+  branch to point to the reviewed cleanup commit; compare restored workflow
+  bytes to8627071 and production/fixtures to71e9c88. If registration failed,
+  stop with recorded evidence after the cleanup; no manual request follows.
+- [ ] Submit exactly one versioned REST workflow-dispatch request, ref
+  linux-hardening, using Task2's endpoint. Stop on rejection without further
+  settings/trigger/branch workaround. If accepted, verify run SHA/event/ref.
+- [ ] Wait through installed metadata-only `gh run watch --exit-status`, bounded
+  by its job timeout; read per-job log text via API into memory, never ZIP/artifact
+  download or cached CLI log commands. Record both native architectures, source
+  SHA, prerequisites, source checks, compilation, six suite outputs/denial logs,
+  CLI/server property/publication and any actual failure boundary. No source
+  fixes or repeated dispatch to force green. Later hardening stays paused.
