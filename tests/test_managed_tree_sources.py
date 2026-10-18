@@ -187,7 +187,8 @@ class ManagedTreeSourceTests(unittest.TestCase):
         self.assertLess(step.index("DirUtils.PrepareCopy("), step.index("DirUtils.ExecuteCopy("))
         known = section(text, "private static void PrepareKnownInstructions(", "private static PreparedInstruction InspectInstruction(")
         self.assertIn("existingTree.Entries", known)
-        self.assertIn("DirUtils.PrepareCopy(", known)
+        self.assertIn("PrepareKnownMappings(", known)
+        self.assertIn("ComposeKnownMappings(", known)
         self.assertIn("RequireKnownKind(", known)
         self.assertNotIn("ExecuteCopy(", known)
         self.assertNotIn("Directory.CreateDirectory", known)
@@ -195,9 +196,34 @@ class ManagedTreeSourceTests(unittest.TestCase):
         self.assertIn("ManagedCopyPlan.IsAtOrBelow(current, root)", roles)
         self.assertIn("current = Path.GetDirectoryName(current)", roles)
         self.assertIn("current == path ? kind : EntryKind.Directory", roles)
-        self.assertIn("existing.TryGetValue(current, out var actual)", roles)
+        self.assertIn("knownContents.TryGetValue(current, out var actual)", roles)
         self.assertIn("requiredKinds.TryGetValue(current, out var proposed)", roles)
         self.assertIn("throw new UnsafePathException(", roles)
+
+    def test_instruction_preflight_composes_known_mappings_without_fabricating_checked_evidence(self):
+        text = source(SERVICES + "ProcessInstructions.cs")
+        known = section(text, "private static void PrepareKnownInstructions(", "private static PreparedInstruction InspectInstruction(")
+        # Structural wiring only: losing the composition edge caused I1. Actual
+        # conflicts/destination choices are asserted by the unexecuted C# cases.
+        self.assertIn("var knownContents =", known)
+        self.assertIn("PrepareKnownMappings(", known)
+        self.assertIn("ComposeKnownMappings(", known)
+        loop = section(known, "foreach (var path in parsed.Paths)", "private static IReadOnlyList<KnownInstructionMapping> PrepareKnownMappings(")
+        self.assertIn("PrepareKnownMappings(boundary, path, knownContents, requiredKinds, ct)", loop)
+        self.assertIn("ComposeKnownMappings(boundary.Root, knownContents, mappings, ct)", loop)
+        self.assertLess(loop.index("PrepareKnownMappings("), loop.index("ComposeKnownMappings("))
+        mappings = section(known, "private static IReadOnlyList<KnownInstructionMapping> PrepareKnownMappings(", "private static void ComposeKnownMappings(")
+        self.assertIn("knownContents.TryGetValue(gamedata,", mappings)
+        self.assertIn("? boundary.Root : boundary.Resolve(\"gamedata\")", mappings)
+        self.assertIn("ManagedCopyPlan.IsAtOrBelow(", mappings)
+        self.assertIn("Path.GetRelativePath(source,", mappings)
+        self.assertIn("nonempty", mappings)
+        self.assertIn('Contains(".git", StringComparison.Ordinal)', mappings)
+        composition = known.split("private static void ComposeKnownMappings(", 1)[1]
+        self.assertIn("knownContents.Remove(mapping.Source)", composition)
+        self.assertIn("knownContents[mapping.Destination] = mapping.Kind", composition)
+        for forbidden in ("new CheckedEntry(", "new CheckedTree(", "ExecuteCopy(", "Directory.CreateDirectory"):
+            self.assertNotIn(forbidden, known)
 
     def test_metadata_and_separator_guard_all_targets_before_io(self):
         metadata = source(SERVICES + "WriteAddonMetaIni.cs")
@@ -225,6 +251,8 @@ class ManagedTreeSourceTests(unittest.TestCase):
             "CleanupPreservesItsOriginalSelection", "CleanSharesPreflightBeforeChangingAnyModes",
             "InspectionDenialIsNotSkippedAsAPermissionMutationFailure",
             "InstructionsValidateTheWholeOrderedListBeforeMoving", "InstructionsPrepareKnownTypesAndFutureConflicts",
+            "InstructionsRejectProducedSourceConflictsBeforeAnyMove", "InstructionsComposeSuccessiveProducedSources",
+            "InstructionsChooseDestinationFromProducedGamedata", "InstructionsDoNotProjectConsumedOrExcludedContents",
             "InstructionsReprepareSourcesProducedByEarlierSteps", "EmptyAndBlankInstructionsCreateNothingButLiteralZeroExecutes",
             "CancellationPrecedesNoOpsAndFollowsEveryCallback", "NearIoRechecksRejectCallbackIntroducedLinks",
             "MetadataGuardsAndPayloadArePreserved", "SeparatorGuardsAndPayloadArePreservedAsync",

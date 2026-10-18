@@ -51,29 +51,113 @@ internal static class ProcessInstructions
     private static void PrepareKnownInstructions(
         FileSystemBoundary boundary, CheckedTree existingTree, InstructionSet parsed, CancellationToken ct)
     {
-        // Temporary role/type requirements for the known list, NOT a virtual
-        // filesystem or a general instruction DSL. Same-kind targets across
-        // steps retain ordered overwrite behavior; incompatible roles reject.
-        var existing = existingTree.Entries.ToDictionary(entry => entry.FullPath, entry => entry.Kind,
-            StringComparer.Ordinal);
+        // Instruction-only path/type projection, seeded from physical evidence.
+        // Derived entries are NOT CheckedEntries or successful inspections. Only
+        // selected mappings compose here; actual steps still prepare physically.
+        var knownContents = existingTree.Entries.Where(entry => entry.Kind != EntryKind.Missing)
+            .ToDictionary(entry => entry.FullPath, entry => entry.Kind, StringComparer.Ordinal);
         var requiredKinds = new Dictionary<string, EntryKind>(StringComparer.Ordinal);
         foreach (var path in parsed.Paths)
         {
             ct.ThrowIfCancellationRequested();
-            var step = InspectInstruction(boundary, path, ct);
-            RequireKnownKind(boundary.Root, existing, requiredKinds, step.Source.FullPath, EntryKind.Directory, ct);
-            RequireKnownKind(boundary.Root, existing, requiredKinds, step.Gamedata.FullPath, EntryKind.Directory, ct);
-            RequireKnownKind(boundary.Root, existing, requiredKinds, step.Destination.FullPath, EntryKind.Directory, ct);
-            if (step.Source.Kind == EntryKind.Missing)
+            var mappings = PrepareKnownMappings(boundary, path, knownContents, requiredKinds, ct);
+            ComposeKnownMappings(boundary.Root, knownContents, mappings, ct);
+        }
+        ct.ThrowIfCancellationRequested();
+    }
+
+    private static IReadOnlyList<KnownInstructionMapping> PrepareKnownMappings(
+        FileSystemBoundary boundary, string path, IReadOnlyDictionary<string, EntryKind> knownContents,
+        Dictionary<string, EntryKind> requiredKinds, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var source = boundary.Resolve(path);
+        var gamedata = Path.Join(source, "gamedata");
+        var destination = knownContents.TryGetValue(gamedata, out var gamedataKind) && gamedataKind == EntryKind.Directory
+            ? boundary.Root : boundary.Resolve("gamedata");
+        RequireKnownKind(boundary.Root, knownContents, requiredKinds, source, EntryKind.Directory, ct);
+        RequireKnownKind(boundary.Root, knownContents, requiredKinds, gamedata, EntryKind.Directory, ct);
+        RequireKnownKind(boundary.Root, knownContents, requiredKinds, destination, EntryKind.Directory, ct);
+        if (ManagedCopyPlan.IsStrictDescendant(destination, source))
+            throw new UnsafePathException("Instruction destination is inside its source.");
+        if (!knownContents.ContainsKey(source))
+        {
+            // A missing source creates only the destination, not the source or
+            // its child gamedata. A role requirement is not produced content.
+            ct.ThrowIfCancellationRequested();
+            return new[] { new KnownInstructionMapping(source, destination, EntryKind.Directory) };
+        }
+        if (source == destination || source.Contains(".git", StringComparison.Ordinal))
+        {
+            ct.ThrowIfCancellationRequested();
+            return Array.Empty<KnownInstructionMapping>();
+        }
+
+        // Materialize this step BEFORE adding outputs. Match managed-copy's
+        // nonempty/.git selection without pretending this is a CheckedTree.
+        var contents = knownContents.Where(entry => ManagedCopyPlan.IsAtOrBelow(entry.Key, source)).ToArray();
+        var nonempty = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in contents)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (entry.Value != EntryKind.NonDirectory)
+                continue;
+            for (var parent = Path.GetDirectoryName(entry.Key);
+                parent is not null && ManagedCopyPlan.IsAtOrBelow(parent, source);
+                parent = Path.GetDirectoryName(parent))
             {
                 ct.ThrowIfCancellationRequested();
-                continue;
+                if (!nonempty.Add(parent))
+                    break;
             }
-            var plan = DirUtils.PrepareCopy(step.Source.FullPath, step.Destination.FullPath, true, null, true, ct);
-            foreach (var directory in plan.Directories)
-                RequireKnownKind(boundary.Root, existing, requiredKinds, directory.Destination.FullPath, EntryKind.Directory, ct);
-            foreach (var file in plan.Files)
-                RequireKnownKind(boundary.Root, existing, requiredKinds, file.Destination.FullPath, EntryKind.NonDirectory, ct);
+        }
+        var directories = new HashSet<string>(StringComparer.Ordinal);
+        var mappings = new List<KnownInstructionMapping>();
+        foreach (var entry in contents.Where(entry => entry.Value == EntryKind.Directory)
+            .OrderBy(entry => ManagedCopyPlan.Depth(entry.Key)).ThenBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (entry.Key.Contains(".git", StringComparison.Ordinal) || (entry.Key != source && !nonempty.Contains(entry.Key)))
+                continue;
+            directories.Add(entry.Key);
+            var target = Path.GetFullPath(Path.GetRelativePath(source, entry.Key), destination);
+            RequireKnownKind(boundary.Root, knownContents, requiredKinds, target, EntryKind.Directory, ct);
+            mappings.Add(new KnownInstructionMapping(entry.Key, target, EntryKind.Directory));
+        }
+        foreach (var entry in contents.Where(entry => entry.Value == EntryKind.NonDirectory)
+            .OrderBy(entry => ManagedCopyPlan.Depth(entry.Key)).ThenBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!directories.Contains(Path.GetDirectoryName(entry.Key)!))
+                continue;
+            // Native member names are mapped as paths, never instruction-normalized.
+            var target = Path.GetFullPath(Path.GetRelativePath(source, entry.Key), destination);
+            RequireKnownKind(boundary.Root, knownContents, requiredKinds, target, EntryKind.NonDirectory, ct);
+            mappings.Add(new KnownInstructionMapping(entry.Key, target, EntryKind.NonDirectory));
+        }
+        ct.ThrowIfCancellationRequested();
+        return mappings;
+    }
+
+    private static void ComposeKnownMappings(
+        string root, Dictionary<string, EntryKind> knownContents,
+        IReadOnlyList<KnownInstructionMapping> mappings, CancellationToken ct)
+    {
+        // Directories remain; selected files move in the same shallow-first
+        // order as managed-copy. Same-kind targets retain ordered overwrite.
+        foreach (var mapping in mappings)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (mapping.Kind == EntryKind.NonDirectory)
+                knownContents.Remove(mapping.Source);
+            knownContents[mapping.Destination] = mapping.Kind;
+            for (var parent = Path.GetDirectoryName(mapping.Destination);
+                parent is not null && ManagedCopyPlan.IsAtOrBelow(parent, root);
+                parent = Path.GetDirectoryName(parent))
+            {
+                ct.ThrowIfCancellationRequested();
+                knownContents[parent] = EntryKind.Directory;
+            }
         }
         ct.ThrowIfCancellationRequested();
     }
@@ -93,7 +177,7 @@ internal static class ProcessInstructions
     }
 
     private static void RequireKnownKind(
-        string root, IReadOnlyDictionary<string, EntryKind> existing, Dictionary<string, EntryKind> requiredKinds,
+        string root, IReadOnlyDictionary<string, EntryKind> knownContents, Dictionary<string, EntryKind> requiredKinds,
         string path, EntryKind kind, CancellationToken ct)
     {
         // Every parent of a proposed file/directory is a directory requirement,
@@ -103,12 +187,14 @@ internal static class ProcessInstructions
         {
             ct.ThrowIfCancellationRequested();
             var expected = current == path ? kind : EntryKind.Directory;
-            if ((existing.TryGetValue(current, out var actual) && actual != EntryKind.Missing && actual != expected)
+            if ((knownContents.TryGetValue(current, out var actual) && actual != expected)
                 || (requiredKinds.TryGetValue(current, out var proposed) && proposed != expected))
                 throw new UnsafePathException("Incompatible known instruction entry roles.");
             requiredKinds[current] = expected;
         }
     }
+
+    private sealed record KnownInstructionMapping(string Source, string Destination, EntryKind Kind);
 
     private sealed record PreparedInstruction(CheckedEntry Source, CheckedEntry Gamedata, CheckedEntry Destination);
 }

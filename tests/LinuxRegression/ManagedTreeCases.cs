@@ -25,7 +25,11 @@ internal static class ManagedTreeCases
         InspectionDenialIsNotSkippedAsAPermissionMutationFailure();
         InstructionsValidateTheWholeOrderedListBeforeMoving();
         InstructionsPrepareKnownTypesAndFutureConflicts();
+        InstructionsRejectProducedSourceConflictsBeforeAnyMove();
         InstructionsReprepareSourcesProducedByEarlierSteps();
+        InstructionsComposeSuccessiveProducedSources();
+        InstructionsChooseDestinationFromProducedGamedata();
+        InstructionsDoNotProjectConsumedOrExcludedContents();
         EmptyAndBlankInstructionsCreateNothingButLiteralZeroExecutes();
         CancellationPrecedesNoOpsAndFollowsEveryCallback();
         NearIoRechecksRejectCallbackIntroducedLinks();
@@ -485,6 +489,48 @@ internal static class ManagedTreeCases
         }
     }
 
+    private static void InstructionsRejectProducedSourceConflictsBeforeAnyMove()
+    {
+        foreach (var composed in new[] { false, true })
+        foreach (var sourceIsFile in new[] { true, false })
+        {
+            WithTree(tree =>
+            {
+                var root = tree.Dir("extract");
+                // The two-step case is the review's exact ordinary-tree example;
+                // the three-step case requires composing another produced source.
+                var later = composed ? "stage-a/stage-b" : "later";
+                var source = tree.Dir("extract/package/gamedata/" + later);
+                var gamedata = tree.Dir("extract/gamedata");
+                string file;
+                string keep;
+                string conflictDirectory;
+                if (sourceIsFile)
+                {
+                    file = tree.File("extract/package/gamedata/" + later + "/conflict", "file");
+                    keep = tree.File("extract/gamedata/conflict/keep", "keep");
+                    conflictDirectory = Path.Join(gamedata, "conflict");
+                }
+                else
+                {
+                    file = tree.File("extract/package/gamedata/" + later + "/conflict/child", "file");
+                    keep = tree.File("extract/gamedata/conflict", "not a directory");
+                    conflictDirectory = Path.Join(source, "conflict");
+                }
+                foreach (var directory in new[] { root, source, gamedata, conflictDirectory })
+                    File.SetUnixFileMode(directory, DirectoryMode);
+                foreach (var member in new[] { file, keep })
+                    File.SetUnixFileMode(member, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead);
+                var before = tree.Capture(root); // all bytes, inventories, file AND directory modes
+                IList<string> instructions = composed
+                    ? ["package", "gamedata/stage-a", "gamedata/stage-b"]
+                    : ["package", "gamedata/later"];
+                Check.Throws<UnsafePathException>(() => ProcessInstructions.Process(root, instructions, default));
+                tree.AssertUnchanged(before);
+            });
+        }
+    }
+
     private static void InstructionsReprepareSourcesProducedByEarlierSteps() => WithTree(tree =>
     {
         var root = tree.Dir("extract");
@@ -497,6 +543,85 @@ internal static class ManagedTreeCases
         ProcessInstructions.Process(root, ["ordinary"], default);
         Check.Equal("ordinary source goes into gamedata", File.ReadAllText(Path.Join(root, "gamedata", "extra.txt")));
     });
+
+    private static void InstructionsComposeSuccessiveProducedSources() => WithTree(tree =>
+    {
+        var root = tree.Dir("extract");
+        tree.File("extract/package/gamedata/stage-a/stage-b/data.txt", "composed across three moves");
+        tree.File("extract/gamedata/data.txt", "overwrite this file");
+        ProcessInstructions.Process(root, ["package", "gamedata/stage-a", "gamedata/stage-b"], default);
+        Check.Equal("composed across three moves", File.ReadAllText(Path.Join(root, "gamedata", "data.txt")));
+        foreach (var consumed in new[] { "package/gamedata/stage-a/stage-b/data.txt",
+            "gamedata/stage-a/stage-b/data.txt", "gamedata/stage-b/data.txt" })
+            Check.True(!File.Exists(Path.Join(root, consumed)), "A composed source file was not moved.");
+    });
+
+    private static void InstructionsChooseDestinationFromProducedGamedata()
+    {
+        WithTree(tree =>
+        {
+            var root = tree.Dir("extract");
+            tree.File("extract/package/gamedata/later/gamedata/data.txt", "produced child gamedata chooses root");
+            tree.File(@"extract/package/gamedata/later/gamedata/native\é' name.txt", "native member name");
+            tree.File("extract/package/gamedata/later/readme.txt", "overwrite at extraction root");
+            tree.File("extract/readme.txt", "old root readme");
+            var wrongDestination = tree.Dir("extract/gamedata/readme.txt");
+            tree.File("extract/gamedata/readme.txt/keep", "wrong destination would conflict");
+            var excluded = tree.File("extract/package/gamedata/later/gamedata/.git/hidden", "not moved");
+            tree.Dir("extract/package/gamedata/later/gamedata/empty");
+            var wrongBefore = tree.Capture(wrongDestination);
+            var excludedBefore = tree.Capture(excluded);
+            ProcessInstructions.Process(root, ["package", "gamedata/later"], default);
+            Check.Equal("overwrite at extraction root", File.ReadAllText(Path.Join(root, "readme.txt")));
+            Check.Equal("produced child gamedata chooses root", File.ReadAllText(Path.Join(root, "gamedata", "data.txt")));
+            Check.Equal("native member name", File.ReadAllText(Path.Join(root, "gamedata", @"native\é' name.txt")));
+            foreach (var absent in new[] { "gamedata/gamedata/data.txt", "gamedata/later/gamedata/data.txt",
+                "package/gamedata/later/gamedata/data.txt", "gamedata/later/readme.txt",
+                "package/gamedata/later/readme.txt", "gamedata/.git", "gamedata/empty" })
+                Check.True(!Path.Exists(Path.Join(root, absent)), "Unexpected produced-source output: " + absent);
+            tree.AssertUnchanged(wrongBefore);
+            tree.AssertUnchanged(excludedBefore);
+        });
+        WithTree(tree =>
+        {
+            var root = tree.Dir("extract");
+            tree.Dir("extract/package/gamedata/later/gamedata"); // empty child is NOT mapped
+            tree.File("extract/package/gamedata/later/data.txt", "ordinary produced source chooses gamedata");
+            var wrongDestination = tree.Dir("extract/data.txt");
+            tree.File("extract/data.txt/keep", "root would be the wrong destination");
+            var before = tree.Capture(wrongDestination);
+            ProcessInstructions.Process(root, ["package", "gamedata/later"], default);
+            Check.Equal("ordinary produced source chooses gamedata", File.ReadAllText(Path.Join(root, "gamedata", "data.txt")));
+            Check.True(!Path.Exists(Path.Join(root, "gamedata", "later", "gamedata")), "An empty child was projected as a produced directory.");
+            tree.AssertUnchanged(before);
+        });
+    }
+
+    private static void InstructionsDoNotProjectConsumedOrExcludedContents()
+    {
+        WithTree(tree =>
+        {
+            var root = tree.Dir("extract");
+            tree.File("extract/package/gamedata/later/nest/conflict", "consumed before its parent instruction");
+            var retained = tree.Dir("extract/gamedata/nest/conflict");
+            tree.File("extract/gamedata/nest/conflict/keep", "not a future file target");
+            var before = tree.Capture(retained);
+            ProcessInstructions.Process(root, ["package/gamedata/later/nest", "package", "gamedata/later"], default);
+            Check.Equal("consumed before its parent instruction", File.ReadAllText(Path.Join(root, "gamedata", "conflict")));
+            Check.True(!Path.Exists(Path.Join(root, "gamedata", "later")), "Consumed contents were projected into a later source.");
+            Check.True(!File.Exists(Path.Join(root, "package", "gamedata", "later", "nest", "conflict")), "Original file was not moved.");
+            tree.AssertUnchanged(before);
+        });
+        WithTree(tree =>
+        {
+            var root = tree.Dir("extract");
+            tree.File("extract/package.git-cache/gamedata/later/conflict", "excluded source is a no-op");
+            tree.File("extract/gamedata/conflict/keep", "must not become a file target");
+            var before = tree.Capture(root);
+            ProcessInstructions.Process(root, ["package.git-cache", "gamedata/later"], default);
+            tree.AssertUnchanged(before);
+        });
+    }
 
     private static void EmptyAndBlankInstructionsCreateNothingButLiteralZeroExecutes()
     {
