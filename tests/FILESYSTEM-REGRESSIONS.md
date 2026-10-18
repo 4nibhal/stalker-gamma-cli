@@ -2,11 +2,12 @@
 
 ## Status and authorization
 
-**Source closure is BLOCKED.** Initial task reviews and source integration checks
-passed. The broad review's I1 is source-addressed in `fe60971`, but the single
-scoped re-review found new Important B1: historical type requirements reject valid
-directory reuse after a produced file moves. Both source verdicts require changes.
-No second fix wave is authorized under
+**The first-batch source implementation/review gate is complete.** After the
+initial task gates, the broad review identified I1 and its correction introduced
+B1. I1 is source-addressed in `fe60971`; the user-authorized B1 correction
+`8830dff` receives both source-spec and quality approvals with no new findings.
+The final scoped review leaves no unresolved I1/B1 source finding. This is not
+compilation, runtime security, full hardening or installation approval. The plan is
 `docs/superpowers/plans/2026-10-18-filesystem-foundations.md`.
 This file distinguishes source/wiring checks from production-C# behavioral
 fixtures. No new behavioral result is claimed by planning or writing a fixture.
@@ -31,7 +32,7 @@ the specified source-review gate, not filesystem behavior or installer readiness
 | `wine-ini` | Existing Wine paths, executable payload names and INI expectations with owned teardown | Same Task 2 approval; registered |
 | `records` | Actual converter/factory roles, separator provenance and both diff consumers | `d8909ec`: spec/quality review approved, no findings; registered |
 | `filesystem` | Typed inspection, missing semantics, parents, links, inventories and cancellation | `fcac037`: spec/quality review approved, no findings; registered |
-| `managed-tree` | Complete mapped preflight, copy/move ordering, counting, chmod/cleanup, instructions and fixed-file writes | Initial `b9eeaef` gate approved; I1 source-addressed in `fe60971`, new Important B1 unresolved; registered |
+| `managed-tree` | Complete mapped preflight, copy/move ordering, counting, chmod/cleanup, instructions and fixed-file writes | Initial `b9eeaef` gate plus I1/B1 corrections through `8830dff` source-approved; no unresolved findings; registered |
 
 At each closed task, a scoped `git diff --exit-code <reviewed-commit> -- <owned-paths>`
 confirmed that its reviewed sources were unchanged. No deferred source findings
@@ -158,13 +159,55 @@ The four-step counterexample produces a file at `gamedata/group/conflict`, moves
 it to `gamedata/conflict`, then needs the former path as a directory. The stale
 NonDirectory requirement rejects that reuse. This violates the intended ordered
 produced-source behavior in the functional spec at lines 130–139. The coordinator
-classified B1 as load-bearing and did not park it. Both source-spec and
-source-quality approval remain withheld despite the passing structural checks.
+classified B1 as load-bearing and did not park it. At that checkpoint both
+source-spec and quality approval were withheld despite passing structural checks.
 
-The one final fix wave and its scoped re-review are exhausted. Implementation
-stops for a new user decision; no further agent, source/fixture change or later
-batch is authorized automatically. The branch, worktree and ignored reports are
-preserved. This is a blocked source handoff, not first-batch completion.
+At that handoff, the one final fix wave and its scoped re-review were exhausted;
+implementation stopped for the user. The user then explicitly authorized a B1-only
+continuation: parallel fixture writing and read-only production analysis, followed
+by a gated minimal production correction and scoped review. Baseline at `4f2307d`
+was clean; fresh `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -q`
+observed 77 source/dry-run methods, OK. This does not resolve B1 or authorize later
+batches. The branch, worktree and ignored reports remain preserved.
+
+### B1 continuation — fixture-first source red/green
+
+The fixture author added two production-C# cases before production changes:
+successful directory reuse after consuming a produced file, and rejection of the
+same still-live file/directory conflict when the consuming move is omitted. Both
+are registered; all C# fixtures remain uncompiled/unexecuted.
+
+The targeted source command
+`PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_managed_tree_sources -v`
+then observed **18 methods: 17 pass, one expected failure, no errors; exit 1**.
+The failure identifies `requiredKinds` declared before the instruction loop.
+A separate source analysis supports per-step proposed roles with unchanged
+cross-step contents. The coordinator confirmed production unchanged against
+`4f2307d` before releasing that minimal edit. This is structural red, not an
+executed C# regression.
+
+The released production change relocates only the `requiredKinds` allocation
+inside the instruction loop and adds an explanatory comment. The implementer
+observed targeted **18/18** and full **78/78** source checks passing. The
+coordinator independently ran full discovery with `-q`: **78 methods, OK**,
+then the installed baseline parser/XML protocol: **147 C# files, no additional
+diagnostic files over the six baseline files; six XML parses**. Whitespace and
+exact staged-path checks passed.
+
+Correction commit `8830dff` contains only ProcessInstructions.cs and its two
+test files; coordinator plan/evidence and ignored reports were excluded. The
+scoped `4f2307d..8830dff` review now marks B1 **ADDRESSED**, source-spec **APPROVED**
+and source-quality **APPROVED**, with **0 Critical / 0 Important / 0 Minor** new
+findings and no new out-of-scope observations. Source approval comes from that
+review, not the Python markers. A fresh scoped diff confirms the three reviewed
+files unchanged since `8830dff`.
+
+All task gates, the broad review and its authorized scoped corrections are now
+closed at source level. C# compilation/source generation, behavioral fixtures and
+the later integration/security gates below remain unverified or unimplemented.
+The source batch stops here; no push, merge, remote execution or later batch is
+authorized by this approval. The existing branch/worktree and ignored evidence
+are retained.
 
 ## Independent coordinator integration audit
 

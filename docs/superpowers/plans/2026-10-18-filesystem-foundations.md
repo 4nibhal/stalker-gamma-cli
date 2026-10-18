@@ -218,14 +218,11 @@ Check.Throws<UnsafePathException>(() => boundary.CheckTree(root));
 
 ## Task 5: Complete managed-operation preparation and execution
 
-**Source gate:** reviewed complete at `b9eeaef`; both task verdicts approved,
-no findings at that task gate. The later broad review identified I1 in produced-
-source instruction preparation; its correction is committed in `fe60971` and
-the single scoped re-review marks I1 source-addressed. That fix introduces new
-Important B1: historical `requiredKinds` entries outlive consumed produced files
-and reject valid later directory reuse. Source closure is **BLOCKED** pending a
-new user decision; the one final fix wave is exhausted. Helper-local stops are
-not whole-installer propagation.
+**Source gate:** approved after `b9eeaef`, I1 correction `fe60971` and the
+user-authorized B1 correction `8830dff`. The final B1 scoped review approves
+source-spec and quality with no new findings; I1 and B1 are source-addressed.
+C# remains uncompiled/unexecuted. Helper-local stops are not whole-installer
+propagation, and no later integration/security batch is declared complete.
 
 **Files/ownership:** Task 5 row only. **Consumes:** Tasks 1/2/4; independent of Task 3 files. **Produces:** strict public DirUtils operations, narrow internal ManagedCopyPlan, guarded instructions/cleanup/metadata/separator writes.
 
@@ -265,7 +262,7 @@ Required other cases: source/destination leaf/parent/root links and cycles; link
 - [x] Prepare source/destination existing trees and **all mapped targets** before callbacks, hash opens or output creation. Validate target types, proposed file/parent conflicts, duplicate canonical mappings and overlap. Reject descendant destinations; check identical paths before safe no-op. For ancestor flattening order source files by increasing source depth so original shallower content is consumed before deeper mappings overwrite it. Never enumerate new outputs into source traversal.
 - [x] Derive progress counts, filters and nonempty-directory selection from the same snapshot. Preserve `.git` substring selection, fileFilter, overwrite and cleanup selection without letting any filter hide a link. Recheck source/destination immediately before each I/O; token checks precede no-op returns and follow every progress/text callback, including the final callback.
 - [x] Permission normalization preflights the whole tree before any mode/attribute change; retain the existing directory mode mask and file attribute behavior. Cleanup preflights retained and removed entries, deletes selected checked entries bottom-up without unchecked recursive fallback. CleanExtractPath shares one operation-owned preflight across chmod/selection; inspection failure cannot become a skipped permission error.
-- [ ] Instructions validate whole syntax/list and the existing extraction tree before mutation, including currently known selected source/destination types. I1's preceding-mapping composition is source-addressed in `fe60971`; new Important B1 blocks closure because historical type requirements reject valid reuse after a produced file moves. Then prepare each instruction from current state, preserving sources created by earlier moves. Distinguish source-containing-gamedata flattening to root from ordinary-source flattening to root/gamedata; no destination inside source. Empty parsed lists/blank markers create nothing.
+- [x] Instructions validate whole syntax/list and the existing extraction tree before mutation, including currently known selected source/destination types. I1's preceding-mapping composition is source-addressed in `fe60971`; B1's step-local proposed-role lifetime is source-approved in `8830dff`. Then prepare each instruction from current state, preserving sources created by earlier moves. Distinguish source-containing-gamedata flattening to root from ordinary-source flattening to root/gamedata; no destination inside source. Empty parsed lists/blank markers create nothing. This checkbox records source review, not executed behavior.
 - [x] WriteAddonMetaIni validates archive component and checks root plus meta.ini leaf before its unchanged UTF-8/CRLF write. Separator validates FolderName at its public entry and checks mods/selected directory/meta.ini before creating anything; Name remains a display label. Keep existing INI content.
 - [x] Run targeted/all Python checks and parse-only diagnostics. Review actual source ordering and snapshots; record unchanged mode policy and unexecuted C# behavior explicitly. Do not modify record extraction/alias/bootstrap code or claim installation compatibility in this intermediate batch.
 - [x] Write report; coordinator reviews and commits only this task's paths.
@@ -288,7 +285,67 @@ var suites = new (string Name, Func<Task> Run)[]
 ```
 
 - [x] Record each actual structural red/green command/output separately from uncompiled/unexecuted C# fixture coverage in `tests/FILESYSTEM-REGRESSIONS.md`. Include the original 16-test baseline, task review findings/resolutions, intentional instruction equality/patch compatibility choices, missing alias integration and remaining inspector/runtime limitations.
-- [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`, `git diff --check`, XML parses and the installed tree-sitter comparison from `2026-10-17-linux-only-fork.md:955–995`. Observed 76 Python source/dry-run methods OK before broad review, then 77 after the I1 correction; 147 C# files with no added diagnostics over six baseline diagnostic files, and six XML files parsed. Parse-only is not compilation.
-- [ ] Generate task-scoped review packages and a final first-batch diff package including new/untracked files, with a fresh read-only reviewer checking spec **and** quality. Packages and the one final fix/re-review are complete: I1 source-addressed, but new load-bearing B1 remains. Both source verdicts require changes; no second wave is authorized automatically. Resolve load-bearing findings through implementation agents and scoped re-review; no runtime/native/network command is allowed during review.
-- [ ] Inspect exact staged paths before every local commit; preserve ignored security evidence, existing worktree and unrelated files. Update task checkboxes/ledger only from real outputs and reviews. Commit integration/evidence separately.
-- [x] Stop for user review: the single final re-review left Important B1 load-bearing, so source closure is BLOCKED. Report source implementation/review and local structural results, not C# correctness, full 4A completion or personal-use readiness. Preserve the branch/worktree/evidence; any further fix wave needs a new user decision. Cache/extractor/metadata/resume/installer integrations are later batches. Remote verification still needs separate consent and authenticated pinned build inputs.
+- [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`, `git diff --check`, XML parses and the installed tree-sitter comparison from `2026-10-17-linux-only-fork.md:955–995`. Observed 76 Python source/dry-run methods OK before broad review, 77 after I1 and 78 after B1; the coordinator's final discovery uses `-q`. Across 147 C# files there are no added diagnostic files over six original baseline diagnostic files; six XML files parse. Parse-only is not compilation.
+- [x] Generate task-scoped review packages and a final first-batch diff package including new files, with a fresh read-only reviewer checking spec **and** quality. The broad review and subsequent scoped corrections identify I1 and B1 as source-addressed; final B1 spec/quality verdicts both approve, with no new findings. No runtime/native/network command was allowed during review, and no broad audit was repeated for the minimal B1 change.
+- [x] Inspect exact staged paths before local commits; preserve ignored security evidence, existing worktree and unrelated files. Update task checkboxes/ledger only from real outputs and reviews. Integration/evidence commits remain separate from production corrections.
+- [x] Original stop for user review: the final re-review left Important B1 load-bearing. The user has now approved the separate B1-only cycle below. Report source implementation/review and local structural results, not C# correctness, full 4A completion or personal-use readiness. Preserve the branch/worktree/evidence. Cache/extractor/metadata/resume/installer integrations are later batches. Remote verification still needs separate consent and authenticated pinned build inputs.
+
+## Authorized B1-only continuation
+
+After the blocked handoff at `4f2307d`, the user explicitly authorized another
+B1-only round and requested several subagents and faster execution. This
+supersedes the previous one-wave stop for this correction only. The approved
+functional design is unchanged: preserve sequential produced-source semantics,
+reject live/same-step type conflicts before mutation, and physically prepare each
+actual step. All original execution/publication constraints remain binding.
+
+**Design:** distinguish current composed path types from one instruction's
+proposed roles. Prefer a fresh `requiredKinds` dictionary per instruction; do not
+discard `knownContents`, weaken kind checks, add a simulator or rewrite selection.
+Clearing the shared dictionary is less explicit; retiring only consumed-file
+requirements would retain other historical reservations. Independent source
+analysis must check the minimal direction before implementation.
+
+**Exclusive ownership and gates:**
+
+| Worker | Files | Gate |
+|---|---|---|
+| Fixture author | `tests/LinuxRegression/ManagedTreeCases.cs`, `tests/test_managed_tree_sources.py` | Write real C# expectations and observe Python structural red before production edits |
+| Production analyst/implementer | `Stalker.Gamma/GammaInstallerServices/ProcessInstructions.cs` | Analysis/report only in parallel with fixtures; edit only after the coordinator releases the red gate |
+| Coordinator/reviewer | Existing plan/evidence/ledger and read-only correction review | Coordinator alone commits; no source ownership overlap |
+
+- [x] In parallel, write the B1 fixtures and independently analyze the lifetime
+  distinction. Use the exact four-step counterexample in
+  `.superpowers/sdd/2026-10-18-filesystem-foundations/final-fix-review.md:41–63`.
+  Expect successful final bytes `first` at `gamedata/conflict` and `last` at
+  `gamedata/group/conflict/child`, with original/intermediate files consumed.
+  The three-step variant omitting `gamedata/group` must still reject the live
+  file/directory conflict with the whole extraction snapshot unchanged.
+- [x] Add a structural check that `requiredKinds` is declared inside the
+  instruction loop, before `PrepareKnownMappings`, not before the loop. Run
+  `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_managed_tree_sources -v`
+  and record actual red. Do not execute the C# fixtures or simulate their policy
+  in Python. Retain I1's exact/reverse and produced-source cases.
+- [x] After red and independent analysis, make the minimum production change:
+
+  ```csharp
+  foreach (var path in parsed.Paths)
+  {
+      ct.ThrowIfCancellationRequested();
+      var requiredKinds = new Dictionary<string, EntryKind>(StringComparer.Ordinal);
+      var mappings = PrepareKnownMappings(boundary, path, knownContents, requiredKinds, ct);
+      ComposeKnownMappings(boundary.Root, knownContents, mappings, ct);
+  }
+  ```
+
+  Remove the old pre-loop declaration. If source analysis finds this insufficient,
+  stop with the concrete counterexample rather than expand the architecture.
+- [x] Run targeted and full Python source/dry-run checks, installed baseline
+  parser/XML verification and whitespace checks. Commit only the three correction
+  paths; give a fresh scoped reviewer the complete range from `4f2307d` plus the
+  B1 report and I1 retention requirements. No repeated broad review or duplicate
+  suite runs by reviewers.
+- [x] Close the source-review gate: `8830dff` receives both approvals and zero
+  new Critical/Important/Minor findings. I1 and B1 have no unresolved source
+  findings. Final status/evidence is kept separate from production corrections.
+  Stop for the user; do not start later hardening batches automatically.
