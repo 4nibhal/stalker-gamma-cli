@@ -3,20 +3,12 @@ name: Bounded Linux verification
 # Manual verification only. Payloads stay on the ephemeral runner; outputs are never launched.
 on:
   workflow_dispatch:
-  # Temporary registration probe, restricted to this branch and workflow.
-  push:
-    branches:
-      - linux-hardening
-    paths:
-      - .github/workflows/build.yml
 
 permissions:
   contents: read
 
 jobs:
   verify:
-    # Registration-only pushes must not start runners.
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
