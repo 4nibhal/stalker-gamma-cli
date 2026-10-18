@@ -1,6 +1,6 @@
-name: Linux builds
+name: Bounded Linux verification
 
-# Draft only: verify immutable build inputs and obtain scoped consent before dispatch.
+# Manual verification only. Payloads stay on the ephemeral runner; outputs are never launched.
 on:
   workflow_dispatch:
 
@@ -8,73 +8,244 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Check Linux source contracts without .NET
-        run: python3 -m unittest tests.test_linux_only -v
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
-      - name: Check CSharpier formatting
-        run: |
-          dotnet tool restore
-          dotnet csharpier check .
-
-  version:
-    runs-on: ubuntu-22.04
-    outputs:
-      file_version: ${{ steps.gitversion.outputs.AssemblySemFileVer }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: gittools/actions/gitversion/setup@v4
-        with:
-          versionSpec: "6.x"
-      - id: gitversion
-        uses: gittools/actions/gitversion/execute@v4
-
-  build:
-    needs: [lint, version]
+  verify:
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
-            runner: ubuntu-22.04
-          - arch: arm64
-            runner: ubuntu-22.04-arm
+          - runner: ubuntu-22.04
+            rid: linux-x64
+            host_arch: x86_64
+            dpkg_arch: amd64
+            elf_machine: Advanced Micro Devices X86-64
+          - runner: ubuntu-22.04-arm
+            rid: linux-arm64
+            host_arch: aarch64
+            dpkg_arch: arm64
+            elf_machine: AArch64
     env:
-      TARGET_ARCH: ${{ matrix.arch }}
-      FILE_VERSION: ${{ needs.version.outputs.file_version }}
+      SOURCE_SHA: 71e9c8839064cb56e4761f04c1cfb9e8ba8ef642
+      RID: ${{ matrix.rid }}
+      EXPECTED_HOST_ARCH: ${{ matrix.host_arch }}
+      EXPECTED_DPKG_ARCH: ${{ matrix.dpkg_arch }}
+      EXPECTED_ELF_MACHINE: ${{ matrix.elf_machine }}
+      GIT_TERMINAL_PROMPT: "0"
+      GIT_CONFIG_NOSYSTEM: "1"
+      GIT_CONFIG_SYSTEM: /dev/null
+      GIT_CONFIG_GLOBAL: /dev/null
+      GIT_ASKPASS: /bin/false
+      NUGET_PACKAGES: /tmp/stalker-gamma-ci/nuget/packages
+      NUGET_HTTP_CACHE_PATH: /tmp/stalker-gamma-ci/nuget/http-cache
+      NUGET_PLUGINS_CACHE_PATH: /tmp/stalker-gamma-ci/nuget/plugins-cache
+      DOTNET_CLI_HOME: /tmp/stalker-gamma-ci/dotnet-home
+      TMPDIR: /tmp/stalker-gamma-ci/scratch
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: "true"
+      DOTNET_NOLOGO: "1"
+      LC_ALL: C
     defaults:
       run:
         shell: bash
+        working-directory: /tmp/stalker-gamma-ci/source
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
-      - name: Run isolated Wine configuration regression
-        run: dotnet run --project tests/LinuxRegression/LinuxRegression.csproj -c Release
-      - name: Build Linux artifacts
-        run: make build appimage -C build/linux VERSION="$FILE_VERSION" ARCH="$TARGET_ARCH"
-      - name: Hash artifacts
-        working-directory: build/linux
-        run: sha256sum "stalker-gamma+linux.${TARGET_ARCH}.AppImage" "stalker-gamma-server+linux.${TARGET_ARCH}.AppImage" > "SHA256SUMS-linux.${TARGET_ARCH}"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: linux-${{ matrix.arch }}
-          path: |
-            build/linux/stalker-gamma+linux.${{ matrix.arch }}.AppImage
-            build/linux/stalker-gamma-server+linux.${{ matrix.arch }}.AppImage
-            build/linux/SHA256SUMS-linux.${{ matrix.arch }}
-          if-no-files-found: error
+      - name: Acquire fixed source and isolate paths
+        working-directory: /tmp
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 4nibhal/stalker-gamma-cli
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = "$EXPECTED_HOST_ARCH"
+          test ! -e /tmp/stalker-gamma-ci/source
+          test ! -L /tmp/stalker-gamma-ci/source
+          command -v git
+          mkdir -p /tmp/stalker-gamma-ci/{nuget,dotnet-home,scratch,out}
+          mkdir -p "$NUGET_PACKAGES" "$NUGET_HTTP_CACHE_PATH" "$NUGET_PLUGINS_CACHE_PATH"
+          printf 'Workflow revision: %s\n' "$GITHUB_SHA"
+          git init /tmp/stalker-gamma-ci/source
+          git -C /tmp/stalker-gamma-ci/source remote add origin https://github.com/4nibhal/stalker-gamma-cli.git
+          git -C /tmp/stalker-gamma-ci/source -c core.hooksPath=/dev/null fetch --depth=1 origin "$SOURCE_SHA"
+          git -C /tmp/stalker-gamma-ci/source -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/stalker-gamma-ci/source rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git -C /tmp/stalker-gamma-ci/source status --porcelain)"
+          printf 'Source revision: %s\n' "$(git -C /tmp/stalker-gamma-ci/source rev-parse HEAD)"
+          cat > /tmp/stalker-gamma-ci/source/global.json <<'JSON'
+          {
+            "sdk": {
+              "version": "10.0.401",
+              "rollForward": "disable",
+              "allowPrerelease": false
+            }
+          }
+          JSON
+          cat > /tmp/stalker-gamma-ci/nuget/NuGet.Config <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            </packageSources>
+            <fallbackPackageFolders><clear /></fallbackPackageFolders>
+            <auditSources>
+              <clear />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            </auditSources>
+          </configuration>
+          XML
+
+      - name: Assert preinstalled prerequisites
+        run: |
+          set -euo pipefail
+          for tool in git python3 make file readelf dotnet clang ld dpkg dpkg-query; do
+            command -v "$tool"
+          done
+          test "$(dotnet --version)" = 10.0.401
+          dotnet --info
+          dotnet --list-sdks
+          dotnet --list-runtimes | grep -E '^Microsoft.NETCore.App 10\.'
+          test "$(dpkg --print-architecture)" = "$EXPECTED_DPKG_ARCH"
+          for package in zlib1g-dev libc6-dev libssl-dev libicu-dev; do
+            test "$(dpkg-query -W -f='${Status}' "$package")" = 'install ok installed'
+            dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' "$package"
+          done
+          test -r /usr/include/zlib.h
+          test -r "$(clang -print-file-name=libz.so)"
+          clang --version
+          ld --version
+          printf 'Image metadata (mutable, not pinned bytes): %s / %s\n' "${ImageOS:-not provided}" "${ImageVersion:-not provided}"
+          printf 'Record the image and runner versions from the GitHub Set up job log.\n'
+
+      - name: Check fixed snapshot source
+        run: |
+          set -euo pipefail
+          # This snapshot intentionally checks its own old workflow, not this workflow revision.
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+          git diff --check
+          bash -n build/update-pkgbuild.sh
+          sh -n build/linux/stalker-gamma.AppDir/AppRun
+          sh -n build/linux/stalker-gamma-server.AppDir/AppRun
+
+      - name: Restore regression runner
+        run: |
+          set -euo pipefail
+          dotnet restore tests/LinuxRegression/LinuxRegression.csproj --configfile /tmp/stalker-gamma-ci/nuget/NuGet.Config --use-lock-file -p:Configuration=Release
+
+      - name: Build regression runner
+        run: |
+          set -euo pipefail
+          dotnet build tests/LinuxRegression/LinuxRegression.csproj -c Release --no-restore --no-incremental -bl:/tmp/stalker-gamma-ci/out/runner.binlog
+
+      - name: Run six regression suites
+        run: |
+          set -euo pipefail
+          # Keep all stdout/stderr, including conditional unexercised-denial messages.
+          dotnet run --project tests/LinuxRegression/LinuxRegression.csproj -c Release --no-build --no-restore --no-launch-profile 2>&1 | tee /tmp/stalker-gamma-ci/out/runner.log
+          python3 - <<'PY'
+          from pathlib import Path
+
+          expected = [
+              "Linux regression suite 'inputs' passed.",
+              "Linux regression suite 'scratch' passed.",
+              "Linux regression suite 'wine-ini' passed.",
+              "Linux regression suite 'records' passed.",
+              "Linux regression suite 'filesystem' passed.",
+              "Linux regression suite 'managed-tree' passed.",
+          ]
+          observed = [
+              line for line in Path("/tmp/stalker-gamma-ci/out/runner.log").read_text().splitlines()
+              if line.startswith("Linux regression suite '")
+          ]
+          if observed != expected:
+              raise SystemExit(f"Unexpected suite results: {observed!r}")
+          PY
+
+      - name: Restore CLI
+        run: |
+          set -euo pipefail
+          dotnet restore stalker-gamma-cli/stalker-gamma-cli.csproj --configfile /tmp/stalker-gamma-ci/nuget/NuGet.Config --use-lock-file -r "$RID" -p:Configuration=Release -p:SelfContained=true
+
+      - name: Evaluate and publish CLI
+        run: |
+          set -euo pipefail
+          dotnet msbuild stalker-gamma-cli/stalker-gamma-cli.csproj -p:Configuration=Release -p:RuntimeIdentifier="$RID" -p:SelfContained=true -getProperty:TargetFramework,RuntimeIdentifier,PublishAot,SelfContained > /tmp/stalker-gamma-ci/out/cli-properties.json
+          cat /tmp/stalker-gamma-ci/out/cli-properties.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          observed = json.loads(Path("/tmp/stalker-gamma-ci/out/cli-properties.json").read_text())["Properties"]
+          expected = {
+              "TargetFramework": "net10.0",
+              "RuntimeIdentifier": os.environ["RID"],
+              "PublishAot": "true",
+              "SelfContained": "true",
+          }
+          if observed != expected:
+              raise SystemExit(f"Unexpected CLI properties: {observed!r}")
+          PY
+          dotnet publish stalker-gamma-cli/stalker-gamma-cli.csproj -c Release -r "$RID" --self-contained true --no-restore -o /tmp/stalker-gamma-ci/out/cli -bl:/tmp/stalker-gamma-ci/out/cli.binlog
+          test -s /tmp/stalker-gamma-ci/out/cli/stalker-gamma
+          test -x /tmp/stalker-gamma-ci/out/cli/stalker-gamma
+          file /tmp/stalker-gamma-ci/out/cli/stalker-gamma
+          readelf -h /tmp/stalker-gamma-ci/out/cli/stalker-gamma | tee /tmp/stalker-gamma-ci/out/cli-elf.txt
+          grep -Eq "^[[:space:]]*Machine:[[:space:]]+$EXPECTED_ELF_MACHINE[[:space:]]*$" /tmp/stalker-gamma-ci/out/cli-elf.txt
+
+      - name: Restore server
+        run: |
+          set -euo pipefail
+          dotnet restore stalker-gamma-cli-server/stalker-gamma-cli-server.csproj --configfile /tmp/stalker-gamma-ci/nuget/NuGet.Config --use-lock-file -r "$RID" -p:Configuration=Release
+
+      - name: Evaluate and publish server
+        run: |
+          set -euo pipefail
+          dotnet msbuild stalker-gamma-cli-server/stalker-gamma-cli-server.csproj -p:Configuration=Release -p:RuntimeIdentifier="$RID" -getProperty:TargetFramework,RuntimeIdentifier,PublishAot,SelfContained,PublishSingleFile > /tmp/stalker-gamma-ci/out/server-properties.json
+          cat /tmp/stalker-gamma-ci/out/server-properties.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          observed = json.loads(Path("/tmp/stalker-gamma-ci/out/server-properties.json").read_text())["Properties"]
+          expected = {
+              "TargetFramework": "net10.0",
+              "RuntimeIdentifier": os.environ["RID"],
+              "PublishAot": "false",
+              "SelfContained": "true",
+              "PublishSingleFile": "true",
+          }
+          if observed != expected:
+              raise SystemExit(f"Unexpected server properties: {observed!r}")
+          PY
+          dotnet publish stalker-gamma-cli-server/stalker-gamma-cli-server.csproj -c Release -r "$RID" --no-restore -o /tmp/stalker-gamma-ci/out/server -bl:/tmp/stalker-gamma-ci/out/server.binlog
+          test -s /tmp/stalker-gamma-ci/out/server/stalker-gamma-server
+          test -x /tmp/stalker-gamma-ci/out/server/stalker-gamma-server
+          file /tmp/stalker-gamma-ci/out/server/stalker-gamma-server
+          readelf -h /tmp/stalker-gamma-ci/out/server/stalker-gamma-server | tee /tmp/stalker-gamma-ci/out/server-elf.txt
+          grep -Eq "^[[:space:]]*Machine:[[:space:]]+$EXPECTED_ELF_MACHINE[[:space:]]*$" /tmp/stalker-gamma-ci/out/server-elf.txt
+
+      - name: Log observed NuGet locks
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          print("Observed NuGet locks (not verified trusted inputs):")
+          for project in ("tests/LinuxRegression", "stalker-gamma-cli", "stalker-gamma-cli-server"):
+              if not Path(project, "packages.lock.json").is_file():
+                  raise SystemExit(f"Missing generated lock: {project}")
+          for path in sorted(Path(".").rglob("packages.lock.json")):
+              raw = path.read_bytes()
+              print(f"Observed lock: {path}; sha256={hashlib.sha256(raw).hexdigest()}")
+              for target, packages in json.loads(raw)["dependencies"].items():
+                  for name, package in packages.items():
+                      print(json.dumps({
+                          "target": target, "package": name,
+                          "resolved": package.get("resolved"),
+                          "contentHash": package.get("contentHash"),
+                      }, sort_keys=True))
+          PY

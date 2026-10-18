@@ -16,15 +16,23 @@ workflow. The CLI is configured for NativeAOT; the optional companion server
 bundles its .NET runtime without AOT. Native/system library requirements still
 apply.
 
-Compilation is planned on GitHub-hosted Linux runners using manual
-`workflow_dispatch` only. Preparing the workflow is not an executed or verified
-build. Builds need separate authorization and completed build-input verification;
-there is no automatic package or release publication. Action/tool versions and
-download checksums still need supply-chain hardening before any dispatch.
+Bounded remote verification uses manual `workflow_dispatch` only, testing source
+`71e9c8839064cb56e4761f04c1cfb9e8ba8ef642` with exactly preinstalled SDK
+`10.0.401` (no roll-forward or prereleases) on native `ubuntu-22.04`/`linux-x64`
+and `ubuntu-22.04-arm`/`linux-arm64`. Missing prerequisites stop the job; no SDK
+or system packages are installed. Inline Git retrieves that public source, not
+the workflow revision; both revisions are logged separately. Payloads stay under
+`/tmp/stalker-gamma-ci/`.
+The scope is source checks, six regression suites, CLI/server publication and ELF
+inspection without launching either application, packaging, releases or uploads.
 
-Local checks use `python3 -m unittest tests.test_linux_only -v`. These source
-contracts and Make dry runs do not replace compilation, runtime regression tests,
-or downloaded-content verification. No validated fork release is claimed here.
+Public branch/logs, mutable hosted images and an initial unresolved NuGet.org-only
+restore are explicitly accepted exceptions, not verified immutable inputs.
+Generated lock identities, resolved versions and content hashes are observations,
+not trusted proof. Preparing this workflow is not evidence of an executed build.
+Local checks use `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`;
+source contracts and Make dry runs do not replace compilation, runtime tests or
+downloaded-content verification. No validated fork release is claimed here.
 
 See [Linux usage](build/linux/README.md) for the installation layout and Wine
 configuration. The platform conversion does not complete the staged filesystem,

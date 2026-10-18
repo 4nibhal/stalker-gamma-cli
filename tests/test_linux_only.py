@@ -259,6 +259,16 @@ class LinuxDeliveryTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, "Unsupported ARCH was accepted")
         self.assertIn("Unsupported ARCH", result.stderr)
 
+
+class LinuxCiTests(unittest.TestCase):
+    def step(self, name):
+        match = re.search(
+            rf"(?ms)^      - name: {re.escape(name)}\n(.*?)(?=^      - name:|\Z)",
+            source(".github/workflows/build.yml"),
+        )
+        self.assertIsNotNone(match, f"Missing verification step: {name}")
+        return match.group(1)
+
     def test_ci_is_manual_linux_only_and_non_publishing(self):
         text = source(".github/workflows/build.yml")
         event_section = re.search(r"(?ms)^on:\n(.*?)(?=^[^\s#])", text)
@@ -274,11 +284,17 @@ class LinuxDeliveryTests(unittest.TestCase):
         jobs_section = text.split("\njobs:\n", 1)[1]
         self.assertEqual(
             re.findall(r"^  ([\w-]+):", jobs_section, re.M),
-            ["lint", "version", "build"],
+            ["verify"],
         )
+        self.assertEqual(event_section.group(1).strip(), "workflow_dispatch:")
+        self.assertRegex(text, r"(?m)^    timeout-minutes: 45$")
+        self.assertIn("fail-fast: false", text)
+        self.assertIn("shell: bash", text)
+        self.assertIn("working-directory: /tmp/stalker-gamma-ci/source", text)
         for forbidden in (
             "windows-",
             "macos-",
+            "uses:",
             "secrets.",
             "update-aur:",
             "update-chocolatey:",
@@ -286,24 +302,212 @@ class LinuxDeliveryTests(unittest.TestCase):
             "publish-release:",
             "action-gh-release",
             "git push",
-            "inputs.dry_run",
+            "inputs.",
+            "inputs:",
+            "setup-dotnet",
+            "upload-artifact",
+            "dotnet tool",
+            "dotnet test",
+            "apt-get ",
+            "apt install",
+            "pip install",
+            "pip3 install",
+            "npm install",
+            "wget ",
+            "curl ",
+            "docker ",
+            "podman ",
+            "qemu",
+            "make build",
+            "appimage",
+            "PublishAot=",
+            "continue-on-error",
+            "|| true",
         ):
             with self.subTest(symbol=forbidden):
                 self.assertFalse(forbidden in text, f"Inherited CI behavior: {forbidden}")
-        for required in (
-            "ubuntu-22.04-arm",
-            "ubuntu-22.04",
-            "tests/LinuxRegression/LinuxRegression.csproj",
-            "persist-credentials: false",
-            "sha256sum",
-            "SHA256SUMS-linux.",
+        for runner, rid, host, dpkg, machine in (
+            ("ubuntu-22.04", "linux-x64", "x86_64", "amd64", "Advanced Micro Devices X86-64"),
+            ("ubuntu-22.04-arm", "linux-arm64", "aarch64", "arm64", "AArch64"),
         ):
-            with self.subTest(symbol=required):
-                self.assertTrue(required in text, f"Linux CI contract missing: {required}")
+            with self.subTest(rid=rid):
+                self.assertIn(
+                    f"- runner: {runner}\n"
+                    f"            rid: {rid}\n"
+                    f"            host_arch: {host}\n"
+                    f"            dpkg_arch: {dpkg}\n"
+                    f"            elf_machine: {machine}",
+                    text,
+                )
+        for name, field in (
+            ("RID", "rid"), ("EXPECTED_HOST_ARCH", "host_arch"),
+            ("EXPECTED_DPKG_ARCH", "dpkg_arch"), ("EXPECTED_ELF_MACHINE", "elf_machine"),
+        ):
+            self.assertIn(f"{name}: ${{{{ matrix.{field} }}}}", text)
+        names = re.findall(r"(?m)^      - name: (.+)$", text)
         self.assertEqual(
-            len(re.findall(r"uses: actions/checkout@", text)),
-            text.count("persist-credentials: false"),
+            names,
+            [
+                "Acquire fixed source and isolate paths", "Assert preinstalled prerequisites",
+                "Check fixed snapshot source", "Restore regression runner",
+                "Build regression runner", "Run six regression suites", "Restore CLI",
+                "Evaluate and publish CLI", "Restore server", "Evaluate and publish server",
+                "Log observed NuGet locks",
+            ],
         )
+        for name in names:
+            self.assertIn("run: |\n          set -euo pipefail\n", self.step(name))
+
+    def test_ci_acquires_only_the_fixed_public_source(self):
+        text = source(".github/workflows/build.yml")
+        self.assertIn("SOURCE_SHA: 71e9c8839064cb56e4761f04c1cfb9e8ba8ef642", text)
+        for setting in (
+            'GIT_TERMINAL_PROMPT: "0"', 'GIT_CONFIG_NOSYSTEM: "1"',
+            "GIT_CONFIG_SYSTEM: /dev/null", "GIT_CONFIG_GLOBAL: /dev/null",
+            "GIT_ASKPASS: /bin/false",
+        ):
+            self.assertIn(setting, text)
+        block = self.step("Acquire fixed source and isolate paths")
+        for line in (
+            "working-directory: /tmp",
+            'test "$GITHUB_REPOSITORY" = 4nibhal/stalker-gamma-cli',
+            'test "$(uname -s)" = Linux',
+            'test "$(uname -m)" = "$EXPECTED_HOST_ARCH"',
+            "test ! -e /tmp/stalker-gamma-ci/source",
+            "test ! -L /tmp/stalker-gamma-ci/source",
+            "git init /tmp/stalker-gamma-ci/source",
+            "git -C /tmp/stalker-gamma-ci/source remote add origin https://github.com/4nibhal/stalker-gamma-cli.git",
+            'git -C /tmp/stalker-gamma-ci/source -c core.hooksPath=/dev/null fetch --depth=1 origin "$SOURCE_SHA"',
+            "git -C /tmp/stalker-gamma-ci/source -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD",
+            'test "$(git -C /tmp/stalker-gamma-ci/source rev-parse HEAD)" = "$SOURCE_SHA"',
+            'test -z "$(git -C /tmp/stalker-gamma-ci/source status --porcelain)"',
+            '"$GITHUB_SHA"', "Source revision:", "Workflow revision:",
+        ):
+            self.assertIn(line, block)
+        self.assertEqual(text.count(" fetch "), 1)
+
+    def test_ci_uses_exact_preinstalled_sdk_and_isolated_nuget(self):
+        text = source(".github/workflows/build.yml")
+        for setting in (
+            "NUGET_PACKAGES: /tmp/stalker-gamma-ci/nuget/packages",
+            "NUGET_HTTP_CACHE_PATH: /tmp/stalker-gamma-ci/nuget/http-cache",
+            "NUGET_PLUGINS_CACHE_PATH: /tmp/stalker-gamma-ci/nuget/plugins-cache",
+            "DOTNET_CLI_HOME: /tmp/stalker-gamma-ci/dotnet-home",
+            "TMPDIR: /tmp/stalker-gamma-ci/scratch",
+            'DOTNET_CLI_TELEMETRY_OPTOUT: "1"',
+            'DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"',
+            'DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: "true"',
+        ):
+            self.assertIn(setting, text)
+        acquisition = self.step("Acquire fixed source and isolate paths")
+        for line in (
+            "cat > /tmp/stalker-gamma-ci/source/global.json <<'JSON'",
+            '"version": "10.0.401"', '"rollForward": "disable"',
+            '"allowPrerelease": false',
+            "cat > /tmp/stalker-gamma-ci/nuget/NuGet.Config <<'XML'",
+            "<packageSources>", "<clear />",
+            '<add key="nuget.org" value="https://api.nuget.org/v3/index.json" />',
+            "<fallbackPackageFolders><clear /></fallbackPackageFolders>",
+            "<auditSources>",
+        ):
+            self.assertIn(line, acquisition)
+        self.assertEqual(
+            re.findall(r'<add key="[^"]+" value="([^"]+)"', acquisition),
+            ["https://api.nuget.org/v3/index.json"] * 2,
+        )
+        prerequisites = self.step("Assert preinstalled prerequisites")
+        for line in (
+            "for tool in git python3 make file readelf dotnet clang ld dpkg dpkg-query; do",
+            'command -v "$tool"', 'test "$(dotnet --version)" = 10.0.401',
+            "dotnet --info", "dotnet --list-sdks",
+            r"dotnet --list-runtimes | grep -E '^Microsoft.NETCore.App 10\.'",
+            'test "$(dpkg --print-architecture)" = "$EXPECTED_DPKG_ARCH"',
+            "for package in zlib1g-dev libc6-dev libssl-dev libicu-dev; do",
+            "test \"$(dpkg-query -W -f='${Status}' \"$package\")\" = 'install ok installed'",
+            "dpkg-query -W -f='${Package} ${Version} ${Architecture}\\n' \"$package\"",
+            "test -r /usr/include/zlib.h", 'test -r "$(clang -print-file-name=libz.so)"',
+            "clang --version", "ld --version", "Set up job",
+        ):
+            self.assertIn(line, prerequisites)
+
+    def test_ci_runs_snapshot_checks_and_all_six_suites_without_implicit_builds(self):
+        checks = self.step("Check fixed snapshot source")
+        for line in (
+            "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v",
+            "git diff --check", "bash -n build/update-pkgbuild.sh",
+            "sh -n build/linux/stalker-gamma.AppDir/AppRun",
+            "sh -n build/linux/stalker-gamma-server.AppDir/AppRun",
+        ):
+            self.assertIn(line, checks)
+        project = "tests/LinuxRegression/LinuxRegression.csproj"
+        self.assertIn(
+            f"dotnet restore {project} --configfile /tmp/stalker-gamma-ci/nuget/NuGet.Config --use-lock-file -p:Configuration=Release",
+            self.step("Restore regression runner"),
+        )
+        self.assertIn(
+            f"dotnet build {project} -c Release --no-restore --no-incremental -bl:/tmp/stalker-gamma-ci/out/runner.binlog",
+            self.step("Build regression runner"),
+        )
+        run = self.step("Run six regression suites")
+        self.assertIn(
+            f"dotnet run --project {project} -c Release --no-build --no-restore --no-launch-profile 2>&1 | tee /tmp/stalker-gamma-ci/out/runner.log",
+            run,
+        )
+        expected = [
+            f'"Linux regression suite \'{name}\' passed."'
+            for name in ("inputs", "scratch", "wine-ini", "records", "filesystem", "managed-tree")
+        ]
+        self.assertEqual(re.findall(r'"Linux regression suite \'[^\']+\' passed\."', run), expected)
+        self.assertIn("if observed != expected:", run)
+        self.assertIn('line.startswith("Linux regression suite \'")', run)
+
+    def test_ci_evaluates_inherited_properties_before_native_publication(self):
+        for name, directory, executable, properties in (
+            ("CLI", "stalker-gamma-cli", "stalker-gamma", ("TargetFramework", "RuntimeIdentifier", "PublishAot", "SelfContained")),
+            ("server", "stalker-gamma-cli-server", "stalker-gamma-server", ("TargetFramework", "RuntimeIdentifier", "PublishAot", "SelfContained", "PublishSingleFile")),
+        ):
+            with self.subTest(project=name):
+                project = f"{directory}/{directory}.csproj"
+                output = "cli" if name == "CLI" else "server"
+                restore_flags = " -p:SelfContained=true" if name == "CLI" else ""
+                self.assertIn(
+                    f'dotnet restore {project} --configfile /tmp/stalker-gamma-ci/nuget/NuGet.Config --use-lock-file -r "$RID" -p:Configuration=Release{restore_flags}',
+                    self.step(f"Restore {name}"),
+                )
+                block = self.step(f"Evaluate and publish {name}")
+                evaluation = (
+                    f'dotnet msbuild {project} -p:Configuration=Release -p:RuntimeIdentifier="$RID"{restore_flags}'
+                    f' -getProperty:{",".join(properties)} > /tmp/stalker-gamma-ci/out/{output}-properties.json'
+                )
+                self.assertIn(evaluation, block)
+                publish_flags = " --self-contained true" if name == "CLI" else ""
+                publish = (
+                    f'dotnet publish {project} -c Release -r "$RID"{publish_flags} --no-restore'
+                    f' -o /tmp/stalker-gamma-ci/out/{output} -bl:/tmp/stalker-gamma-ci/out/{output}.binlog'
+                )
+                self.assertIn(publish, block)
+                for line in (
+                    '["Properties"]', '"TargetFramework": "net10.0"',
+                    '"RuntimeIdentifier": os.environ["RID"]', '"SelfContained": "true"',
+                    f'"PublishAot": "{"true" if name == "CLI" else "false"}"',
+                    "if observed != expected:",
+                    f"test -s /tmp/stalker-gamma-ci/out/{output}/{executable}",
+                    f"test -x /tmp/stalker-gamma-ci/out/{output}/{executable}",
+                    f"file /tmp/stalker-gamma-ci/out/{output}/{executable}",
+                    f"readelf -h /tmp/stalker-gamma-ci/out/{output}/{executable} | tee /tmp/stalker-gamma-ci/out/{output}-elf.txt",
+                    f'grep -Eq "^[[:space:]]*Machine:[[:space:]]+$EXPECTED_ELF_MACHINE[[:space:]]*$" /tmp/stalker-gamma-ci/out/{output}-elf.txt',
+                ):
+                    self.assertIn(line, block)
+                self.assertLess(block.index("if observed != expected:"), block.index(publish))
+                if name == "server":
+                    self.assertIn('"PublishSingleFile": "true"', block)
+                self.assertNotRegex(block, rf"(?m)^\s*(?:\./)?/tmp/stalker-gamma-ci/out/{output}/{executable}(?:\s|$)")
+        locks = self.step("Log observed NuGet locks")
+        for line in (
+            "Observed NuGet locks (not verified trusted inputs)",
+            'rglob("packages.lock.json")', "hashlib.sha256", "resolved", "contentHash",
+        ):
+            self.assertIn(line, locks)
 
 
 class LinuxDocumentationTests(unittest.TestCase):
