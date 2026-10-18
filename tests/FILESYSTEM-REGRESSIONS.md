@@ -2,8 +2,11 @@
 
 ## Status and authorization
 
-Source implementation and task reviews are complete; integration verification
-has passed and the broad source review remains pending under
+**Source closure is BLOCKED.** Initial task reviews and source integration checks
+passed. The broad review's I1 is source-addressed in `fe60971`, but the single
+scoped re-review found new Important B1: historical type requirements reject valid
+directory reuse after a produced file moves. Both source verdicts require changes.
+No second fix wave is authorized under
 `docs/superpowers/plans/2026-10-18-filesystem-foundations.md`.
 This file distinguishes source/wiring checks from production-C# behavioral
 fixtures. No new behavioral result is claimed by planning or writing a fixture.
@@ -28,7 +31,7 @@ the specified source-review gate, not filesystem behavior or installer readiness
 | `wine-ini` | Existing Wine paths, executable payload names and INI expectations with owned teardown | Same Task 2 approval; registered |
 | `records` | Actual converter/factory roles, separator provenance and both diff consumers | `d8909ec`: spec/quality review approved, no findings; registered |
 | `filesystem` | Typed inspection, missing semantics, parents, links, inventories and cancellation | `fcac037`: spec/quality review approved, no findings; registered |
-| `managed-tree` | Complete mapped preflight, copy/move ordering, counting, chmod/cleanup, instructions and fixed-file writes | `b9eeaef`: spec/quality review approved, no findings; registered |
+| `managed-tree` | Complete mapped preflight, copy/move ordering, counting, chmod/cleanup, instructions and fixed-file writes | Initial `b9eeaef` gate approved; I1 source-addressed in `fe60971`, new Important B1 unresolved; registered |
 
 At each closed task, a scoped `git diff --exit-code <reviewed-commit> -- <owned-paths>`
 confirmed that its reviewed sources were unchanged. No deferred source findings
@@ -87,21 +90,23 @@ names before invoking any fixture, runs all registered suites when no arguments
 are supplied, retains its Linux guard and has no inline recursive teardown.
 The last registration was added only after Task 5's clean source review. Full
 Python discovery and whole-batch parser/XML checks then passed as recorded below;
-the broad source review remains pending. No C# runner was executed.
+the broad source review subsequently identified I1, recorded below. No C# runner
+was executed.
 
 The registration source assertion now requires exact name/class-RunAsync pairs.
 An additional source-order method checks the guard, all-suite selection, requested
 name validation and later dispatch loop. The targeted friend/selection command
 (`tests.test_foundation_integration.FoundationIntegrationTests.test_library_exposes_internals_only_to_regression_assembly`
 and `tests.test_foundation_integration.FoundationIntegrationTests.test_runner_selection_is_prevalidated_before_fixture_dispatch`,
-using the same unittest prefix and `-v`) observed 2 methods, OK. This does not
-close the pending all-suite integration or establish executed argument handling.
+using the same unittest prefix and `-v`) observed 2 methods, OK. At that snapshot
+all-suite integration was pending; these two checks do not establish executed
+argument handling.
 
 Immediately before Task 5 review, fresh coordinator full discovery observed
 76 methods with exactly one failing subtest: the intentionally pending
 `("managed-tree", ManagedTreeCases.RunAsync)` registration. All other methods
-passed. Only Task 5's eight files entered `b9eeaef`; its task review is active.
-This does not close the final integration gate or establish any C# behavior.
+passed. Only Task 5's eight files entered `b9eeaef`; its task review was active
+at that snapshot. This historical run does not establish any C# behavior.
 
 ### Integrated source verification before broad review
 
@@ -114,11 +119,52 @@ After the final reviewed suite registration, the coordinator actually ran:
 | XML parser over Directory.Build.props and all five projects | Six XML files parsed |
 | `git diff --check` | Exit 0, no whitespace diagnostics |
 
-Task 5's returned review approves both source-level spec compliance and quality
-with no findings. A fresh scoped diff confirms its eight files unchanged since
-`b9eeaef`. Fixture-first chronology remains report-supported, not independently
-proven by the final diff. The next gate is the fresh broad first-batch review,
-not C# execution, merge or installation.
+Task 5's initial returned review approved both source-level spec compliance and
+quality with no findings. A scoped diff at that task's closure confirmed its
+eight files unchanged since `b9eeaef`. Fixture-first chronology remains
+report-supported, not independently proven by the final diff. The next gate at that
+snapshot was the broad first-batch review, not C# execution, merge or installation.
+
+### Broad review and single final correction
+
+The broad source review of `a06783b..9c6853d` returned 0 Critical, 1 Important
+and 0 Minor findings. I1 identified missing preparation of derivable mapped
+targets when preceding instructions produce a later source. It was a source/
+control-flow finding, not a reproduced C# runtime failure.
+
+One consolidated fix wave produced `fe60971`, changing only ProcessInstructions,
+ManagedTreeCases and their Python structural check. Its report records
+fixture-first exact/reverse conflicts with unchanged whole-extraction snapshots, longer
+produced-source chains and destination-choice/consumed-content expectations.
+Those C# fixtures remain written, uncompiled and unexecuted.
+
+The implementer recorded structural red with 17 methods: 16 passed and one
+missing-composition assertion failed; targeted green then passed all 17. The
+coordinator freshly ran full Python discovery after the fix: **77 source/dry-run
+methods, OK**. Whole-batch parsing still observed 147 C# files, six original
+baseline diagnostic files and zero additional diagnostic files; all six XML
+files parsed. Working and cached whitespace checks returned 0, and the cached
+path list contained only those three fix paths. No behavioral green is inferred.
+
+The single scoped re-review of `9c6853d..fe60971` found I1 source-addressed, but
+reported new B1 (0 Critical / 1 Important / 0 Minor). The coordinator checked the
+source: composition removes consumed files from `knownContents` at
+`ProcessInstructions.cs:151–153`, but the shared `requiredKinds` table persists
+across instructions and still rejects a later directory at the now-absent file
+path (`:57–65,190–193`). This is a compatibility rejection in source/control flow,
+not an executed C# reproduction or a demonstrated escape/destructive outcome.
+
+The four-step counterexample produces a file at `gamedata/group/conflict`, moves
+it to `gamedata/conflict`, then needs the former path as a directory. The stale
+NonDirectory requirement rejects that reuse. This violates the intended ordered
+produced-source behavior in the functional spec at lines 130–139. The coordinator
+classified B1 as load-bearing and did not park it. Both source-spec and
+source-quality approval remain withheld despite the passing structural checks.
+
+The one final fix wave and its scoped re-review are exhausted. Implementation
+stops for a new user decision; no further agent, source/fixture change or later
+batch is authorized automatically. The branch, worktree and ignored reports are
+preserved. This is a blocked source handoff, not first-batch completion.
 
 ## Independent coordinator integration audit
 
